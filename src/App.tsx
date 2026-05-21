@@ -1,122 +1,42 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+// src/App.tsx
+import './App.css';
+import { GoalFormAndChat } from './components/GoalFormAndChat.tsx';
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app-container" style={{ display: "flex", height: "100vh" }}>
+      
+      {/* 【左側】：メニューバー（ひとまずモックとして枠だけ用意） */}
+      <aside className="sidebar" style={{ width: "20%", borderRight: "3px solid #eee", padding: "20px" }}>
+        <h3>メニュー</h3>
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          <li style={{ marginBottom: "10px", fontWeight: "bold", color: "#007bff" }}>🎯 目的の設定</li>
+          <li style={{ marginBottom: "10px", color: "#666" }}>📝 タスク管理</li>
+          <li style={{ marginBottom: "10px", color: "#666" }}>💬 モチベ低下の相談</li>
+        </ul>
+      </aside>
 
-      <div className="ticks"></div>
+      {/* 【中央】：メインコンテンツ */}
+      <main className="main-content" style={{ width: "55%", padding: "20px", overflowY: "auto" }}>
+        {/* 2. ここで呼び出す！ */}
+        <GoalFormAndChat />
+      </main>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {/* 【右側】：サポート ＆ キャラクターエリア（枠だけ用意） */}
+      <aside className="support-bar" style={{ width: "25%", borderLeft: "3px solid #eee", padding: "20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div className="current-goal" style={{ border: "1px solid #ffeeba", backgroundColor: "#fff3cd", padding: "15px", borderRadius: "8px" }}>
+          <strong>今の目標：</strong>
+          <p style={{ margin: "5px 0 0 0", color: "#666" }}>（チャット完了後にここに反映されます）</p>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+        
+        <div className="character-area" style={{ border: "1px solid #ddd", padding: "15px", borderRadius: "8px", textAlign: "center", backgroundColor: "#f9f9f9" }}>
+          <div style={{ fontSize: "40px", marginBottom: "10px" }}>🤖</div>
+          <p style={{ margin: 0, fontSize: "14px" }}>「まずは中央の画面で、あなたのことを教えてね！」</p>
         </div>
-      </section>
+      </aside>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
