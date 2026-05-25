@@ -12,7 +12,7 @@ function App() {
         <ul style={{ listStyle: "none", padding: 0 }}>
           <li style={{ marginBottom: "10px", fontWeight: "bold", color: "#007bff" }}>🎯 目的の設定</li>
           <li style={{ marginBottom: "10px", color: "#666" }}>📝 タスク管理</li>
-          <li style={{ marginBottom: "10px", color: "#666" }}>💬 モチベ低下の相談</li>
+          <li style={{ marginBottom: "10px", color: "#666" }}>💬 モチベ低下時の相談</li>
         </ul>
       </aside>
 

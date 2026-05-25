@@ -5,22 +5,23 @@ interface Message {
   role: "user" | "model";
   text: string;
 }
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!API_KEY) {
-  console.error("エラー: VITE_GEMINI_API_KEY が .env ファイルに設定されていません。");
-}
-
-const genAI = new GoogleGenerativeAI(API_KEY || "");
+const API_KEYS = [
+  import.meta.env.VITE_GEMINI_API_KEY_1,
+  import.meta.env.VITE_GEMINI_API_KEY_2,
+];
 
 export const GoalFormAndChat: React.FC = () => {
   // --- State管理 ---
-  const [step, setStep] = useState<"form" | "chat">("form");
   const [userType, setUserType] = useState<"学生" | "社会人" | "">("");
   const [userContext, setUserContext] = useState("");
   const [qualificationName, setQualificationName] = useState("");
-  
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const savedMessages = localStorage.getItem("chat_history");
+    return savedMessages ? JSON.parse(savedMessages) : [];
+  });
+  const [step, setStep] = useState<"form" | "chat">(
+    messages.length > 0 ? "chat" : "form",
+  );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -28,21 +29,8 @@ export const GoalFormAndChat: React.FC = () => {
   const chatRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 常に最新のメッセージにスクロール
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // --- チャット開始処理（フォーム確定時） ---
-  const handleStartChat = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!userType || !userContext || !qualificationName) return;
-
-    setIsLoading(true);
-    setStep("chat");
-
-    // 1. システムプロンプトの組み立て（先ほどの決定版）
-    const systemInstruction = `あなた（Gemini）は、資格学習者の「内発的動機付け」を引き出す優秀なAIメンターコーチです。
+  // 1. システムプロンプトの組み立て（先ほどの決定版）
+  const systemInstruction = `あなた（Gemini）は、資格学習者の「内発的動機付け」を引き出す優秀なAIメンターコーチです。
 ユーザーが「学ぶこと自体の面白さ」を感じ、自分にとってのメリットを納得（自律性の向上）できるよう、以下の【対話ステップ】を厳格に守って対話してください。
 
 【事前に入手しているユーザー情報】
@@ -76,27 +64,70 @@ export const GoalFormAndChat: React.FC = () => {
 ・目標取得時期：[ステップ6で決めた時期]
 ---`;
 
-    try {
-      // 2. モデルの初期化（最軽量で制限の緩い Flash Lite を指定）
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash-lite",
-        systemInstruction: systemInstruction // SDKの正式なシステムプロンプト設定方法
-      });
+  // 常に最新のメッセージにスクロール
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-      // 3. チャットセッションの開始
-      chatRef.current = model.startChat({ history: [] });
-
-      // 4. AIに最初のステップを発言させる（空文字、またはトリガーを送る）
-      const result = await chatRef.current.sendMessage("対話を開始してください。ステップ4の問いかけをお願いします。");
-      const botText = await result.response.text();
-
-      setMessages([{ role: "model", text: botText }]);
-    } catch (error) {
-      console.error(error);
-      setMessages([{ role: "model", text: "通信エラーが発生しました。時間を置いてやり直してください。" }]);
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    if (step === "chat" && messages.length > 0) {
+      localStorage.setItem("chat_history", JSON.stringify(messages));
     }
+  }, [messages]);
+
+  // --- チャット開始処理（フォーム確定時） ---
+  const handleStartChat = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!userType || !userContext || !qualificationName) return;
+
+    setIsLoading(true);
+    setStep("chat");
+
+    let botText = "";
+    let success = false;
+
+    for (let i = 0; i < API_KEYS.length; i++) {
+      try {
+        const currentKey = API_KEYS[i];
+        if (!currentKey) continue;
+
+        // その時のキーでインスタンスとモデルを生成
+        const tempGenAI = new GoogleGenerativeAI(currentKey);
+        const model = tempGenAI.getGenerativeModel({
+          model: "gemini-2.5-flash-lite",
+          systemInstruction: systemInstruction,
+        });
+
+        // チャットセッションの開始
+        chatRef.current = model.startChat({ history: [] });
+
+        // AIに最初のステップを発言させる
+        const result = await chatRef.current.sendMessage(
+          "対話を開始してください。ステップ4の問いかけをお願いします。",
+        );
+        botText = await result.response.text();
+
+        success = true;
+        break; // 成功したらループを抜ける
+      } catch (error) {
+        console.warn(
+          `[開始エラー] APIキー ${i + 1}番目が失敗しました。切り替えます。`,
+          error,
+        );
+      }
+    }
+
+    if (success) {
+      setMessages([{ role: "model", text: botText }]);
+    } else {
+      setMessages([
+        {
+          role: "model",
+          text: "通信エラーが発生しました。時間を置いてやり直してください。",
+        },
+      ]);
+    }
+    setIsLoading(false);
   };
 
   // --- メッセージ送信処理 ---
@@ -106,29 +137,73 @@ export const GoalFormAndChat: React.FC = () => {
 
     const userText = input.trim();
     setInput("");
-    
+
     // ユーザーの発言を画面に即時反映
     setMessages((prev) => [...prev, { role: "user", text: userText }]);
-    setIsLoading(true); // 連打防止のためにローディング開始（ボタンがdisabledになる）
+    setIsLoading(true);
 
-    try {
-      // セッションを通じてメッセージを送信
-      const result = await chatRef.current.sendMessage(userText);
-      const botText = await result.response.text();
+    // ✨ 変更点：送信処理にも同じく自動切り替えループを導入
+    let botText = "";
+    let success = false;
 
+    for (let i = 0; i < API_KEYS.length; i++) {
+      try {
+        const currentKey = API_KEYS[i];
+        if (!currentKey) continue;
+
+        const tempGenAI = new GoogleGenerativeAI(currentKey);
+        const model = tempGenAI.getGenerativeModel({
+          model: "gemini-2.5-flash-lite",
+          systemInstruction: systemInstruction, // 外側のスコープのプロンプトをそのまま利用
+        });
+
+        // ✨ 仕組みの理解が活きる場所：毎回これまでの全履歴を整形して渡す
+        const formattedHistory = messages.slice(1).map((m) => ({
+          role: m.role,
+          parts: [{ text: m.text }],
+        }));
+
+        // 新しいキーでセッションを再作成
+        chatRef.current = model.startChat({ history: formattedHistory });
+
+        // メッセージ送信
+        const result = await chatRef.current.sendMessage(userText);
+        botText = await result.response.text();
+
+        success = true;
+        break; // 成功したらループを抜ける
+      } catch (error) {
+        console.warn(
+          `[送信エラー] APIキー ${i + 1}番目が失敗しました。切り替えます。`,
+          error,
+        );
+      }
+    }
+
+    if (success) {
       setMessages((prev) => [...prev, { role: "model", text: botText }]);
 
-      // もし最終の「【決定した目標】」が含まれていたら、親コンポーネントやDBに保存する処理をここに挟む
       if (botText.includes("【決定した目標】")) {
         console.log("目標設定完了！右側UI等への書き込み処理へ");
       }
-
-    } catch (error) {
-      console.error(error);
-      setMessages((prev) => [...prev, { role: "model", text: "エラーが発生しました。再度送信してください。" }]);
-    } finally {
-      setIsLoading(false); // ローディング解除
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        { role: "model", text: "エラーが発生しました。再度送信してください。" },
+      ]);
     }
+    setIsLoading(false);
+  };
+
+  const handleResetChat = () => {
+    // ① LocalStorageからチャット履歴の引き出しを完全に削除
+    localStorage.removeItem("chat_history");
+
+    // ② ReactのメッセージStateを空っぽにリセット
+    setMessages([]);
+
+    // ③ 画面のステップを最初の入力フォーム画面に戻す
+    setStep("form");
   };
 
   // --- 画面レンダリング ---
@@ -136,57 +211,148 @@ export const GoalFormAndChat: React.FC = () => {
     <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
       {step === "form" ? (
         /* --- ステップ1〜3：UI入力フォーム --- */
-        <form onSubmit={handleStartChat} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+        <form
+          onSubmit={handleStartChat}
+          style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+        >
           <h2>まずはあなたのことを教えてください</h2>
-          
+
           <div>
             <label>区分：</label>
-            <button type="button" onClick={() => setUserType("学生")} style={{ fontWeight: userType === "学生" ? "bold" : "normal" }}>学生</button>
-            <button type="button" onClick={() => setUserType("社会人")} style={{ fontWeight: userType === "社会人" ? "bold" : "normal", marginLeft: "10px" }}>社会人</button>
+            <button
+              type="button"
+              onClick={() => setUserType("学生")}
+              style={{ fontWeight: userType === "学生" ? "bold" : "normal" }}
+            >
+              学生
+            </button>
+            <button
+              type="button"
+              onClick={() => setUserType("社会人")}
+              style={{
+                fontWeight: userType === "社会人" ? "bold" : "normal",
+                marginLeft: "10px",
+              }}
+            >
+              社会人
+            </button>
           </div>
 
           {userType && (
             <div>
-              <label>{userType === "学生" ? "学部・学んでいること・興味のあること：" : "現在の職種・仕事内容："}</label>
-              <input type="text" value={userContext} onChange={(e) => setUserContext(e.target.value)} placeholder="例：情報学部、SE職など" required style={{ width: "100%", padding: "8px", marginTop: "5px" }} />
+              <label>
+                {userType === "学生"
+                  ? "学部・学んでいること・興味のあること："
+                  : "現在の職種・仕事内容："}
+              </label>
+              <input
+                type="text"
+                value={userContext}
+                onChange={(e) => setUserContext(e.target.value)}
+                placeholder="例：情報学部、SE職など"
+                required
+                style={{ width: "100%", padding: "8px", marginTop: "5px" }}
+              />
             </div>
           )}
 
           <div>
             <label>今取りたい資格：</label>
-            <input type="text" value={qualificationName} onChange={(e) => setQualificationName(e.target.value)} placeholder="例：ITパスポート" required style={{ width: "100%", padding: "8px", marginTop: "5px" }} />
+            <input
+              type="text"
+              value={qualificationName}
+              onChange={(e) => setQualificationName(e.target.value)}
+              placeholder="例：ITパスポート"
+              required
+              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
+            />
           </div>
 
-          <button type="submit" disabled={!userType || !userContext || !qualificationName} style={{ padding: "10px", cursor: "pointer" }}>
+          <button
+            type="submit"
+            disabled={!userType || !userContext || !qualificationName}
+            style={{ padding: "10px", cursor: "pointer" }}
+          >
             目的の深掘りを始める
           </button>
         </form>
       ) : (
         /* --- ステップ4〜7：APIチャット画面 --- */
-        <div style={{ border: "1px solid #ccc", borderRadius: "8px", padding: "15px" }}>
+        <div
+          style={{
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            padding: "15px",
+          }}
+        >
           <h3>🎯 資格取得の目的を明確にする対話</h3>
-          <div style={{ height: "400px", overflowY: "auto", borderBottom: "1px solid #eee", marginBottom: "15px", padding: "10px" }}>
+          <div
+            style={{
+              height: "400px",
+              overflowY: "auto",
+              borderBottom: "1px solid #eee",
+              marginBottom: "15px",
+              padding: "10px",
+            }}
+          >
             {messages.map((msg, idx) => (
-              <div key={idx} style={{ textAlign: msg.role === "user" ? "right" : "left", margin: "10px 0" }}>
-                <div style={{ 
-                  display: "inline-block", 
-                  padding: "10px", 
-                  borderRadius: "8px", 
-                  backgroundColor: msg.role === "user" ? "#dcf8c6" : "#f1f0f0",
-                  whiteSpace: "pre-wrap",
-                  maxWidth: "80%"
-                }}>
+              <div
+                key={idx}
+                style={{
+                  textAlign: msg.role === "user" ? "right" : "left",
+                  margin: "10px 0",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-block",
+                    padding: "10px",
+                    borderRadius: "8px",
+                    backgroundColor:
+                      msg.role === "user" ? "#dcf8c6" : "#f1f0f0",
+                    whiteSpace: "pre-wrap",
+                    maxWidth: "80%",
+                  }}
+                >
                   {msg.text}
                 </div>
               </div>
             ))}
-            {isLoading && <div style={{ color: "#999" }}>先輩AIが思考中...</div>}
+            {isLoading && (
+              <div style={{ color: "#999" }}>先輩AIが思考中...</div>
+            )}
+            <button
+              type="button"
+              onClick={handleResetChat}
+              style={{
+                padding: "5px 10px",
+                backgroundColor: "#ff4d4f",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              最初からやり直す
+            </button>
             <div ref={chatEndRef} />
           </div>
 
-          <form onSubmit={handleSendMessage} style={{ display: "flex", gap: "10px" }}>
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="メッセージを入力..." disabled={isLoading} style={{ flexGrow: 1, padding: "8px" }} />
-            <button type="submit" disabled={isLoading || !input.trim()}>送信</button>
+          <form
+            onSubmit={handleSendMessage}
+            style={{ display: "flex", gap: "10px" }}
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="メッセージを入力..."
+              disabled={isLoading}
+              style={{ flexGrow: 1, padding: "8px" }}
+            />
+            <button type="submit" disabled={isLoading || !input.trim()}>
+              送信
+            </button>
           </form>
         </div>
       )}
