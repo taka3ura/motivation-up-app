@@ -5,12 +5,27 @@ interface Message {
   role: "user" | "model";
   text: string;
 }
+
 const API_KEYS = [
   import.meta.env.VITE_GEMINI_API_KEY_1,
   import.meta.env.VITE_GEMINI_API_KEY_2,
 ];
 
-export const GoalFormAndChat: React.FC = () => {
+// ⭕ 型定義に qualification（資格名）を追加
+interface GoalFormAndChatProps {
+  onGoalComplete: (goal: {
+    qualification: string;
+    purpose: string;
+    field: string;
+    period: string;
+  }) => void;
+  onGoalReset: () => void;
+}
+
+export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
+  onGoalComplete,
+  onGoalReset,
+}) => {
   // --- State管理 ---
   const [userType, setUserType] = useState<"学生" | "社会人" | "">("");
   const [userContext, setUserContext] = useState("");
@@ -29,7 +44,7 @@ export const GoalFormAndChat: React.FC = () => {
   const chatRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. システムプロンプトの組み立て（先ほどの決定版）
+  // 1. システムプロンプトの組み立て
   const systemInstruction = `あなた（Gemini）は、資格学習者の「内発的動機付け」を引き出す優秀なAIメンターコーチです。
 ユーザーが「学ぶこと自体の面白さ」を感じ、自分にとってのメリットを納得（自律性の向上）できるよう、以下の【対話ステップ】を厳格に守って対話してください。
 
@@ -52,7 +67,7 @@ export const GoalFormAndChat: React.FC = () => {
 質問：「この分野を学ぶことで、あなた自身にはどんなメリット（知識が身に付く、業務の理解が早くなるなど）がありそうですか？」
 
 ■ ステップ6（ユーザーの返答後）：
-ユーザーの回答を肯定しつつ、正しい情報に基づいて「まさにその通りですね！他にもこんなメリットがあります」と肉付けしてあげてください。そして、最後に時期を設定するための質問をしてください。
+ユーザーの回答を肯定しつつ、正しい情報に基づいて「まさにその通りですね！他にもこんなメリットがあります」と肉付けしてあげてください。 tenderly、最後に時期を設定するための質問をしてください。
 質問：「このモチベーションを維持して走り切るために、いつまでにこの資格を取得（合格）したいか、目標の時期を決めましょう！」
 
 ■ ステップ7（最終着地点）：
@@ -61,7 +76,7 @@ export const GoalFormAndChat: React.FC = () => {
 【決定した目標】
 ・真の目的：[ステップ5・6で言語化したメリット]
 ・注力する分野：[ステップ4で選んだ分野]
-・目標取得時期：[ステップ6で決めた時期]
+------------目标取得時期：[ステップ6で決めた時期]
 ---`;
 
   // 常に最新のメッセージにスクロール
@@ -91,24 +106,21 @@ export const GoalFormAndChat: React.FC = () => {
         const currentKey = API_KEYS[i];
         if (!currentKey) continue;
 
-        // その時のキーでインスタンスとモデルを生成
         const tempGenAI = new GoogleGenerativeAI(currentKey);
         const model = tempGenAI.getGenerativeModel({
           model: "gemini-2.5-flash-lite",
           systemInstruction: systemInstruction,
         });
 
-        // チャットセッションの開始
         chatRef.current = model.startChat({ history: [] });
 
-        // AIに最初のステップを発言させる
         const result = await chatRef.current.sendMessage(
           "対話を開始してください。ステップ4の問いかけをお願いします。",
         );
         botText = await result.response.text();
 
         success = true;
-        break; // 成功したらループを抜ける
+        break;
       } catch (error) {
         console.warn(
           `[開始エラー] APIキー ${i + 1}番目が失敗しました。切り替えます。`,
@@ -138,11 +150,9 @@ export const GoalFormAndChat: React.FC = () => {
     const userText = input.trim();
     setInput("");
 
-    // ユーザーの発言を画面に即時反映
     setMessages((prev) => [...prev, { role: "user", text: userText }]);
     setIsLoading(true);
 
-    // ✨ 変更点：送信処理にも同じく自動切り替えループを導入
     let botText = "";
     let success = false;
 
@@ -154,24 +164,21 @@ export const GoalFormAndChat: React.FC = () => {
         const tempGenAI = new GoogleGenerativeAI(currentKey);
         const model = tempGenAI.getGenerativeModel({
           model: "gemini-2.5-flash-lite",
-          systemInstruction: systemInstruction, // 外側のスコープのプロンプトをそのまま利用
+          systemInstruction: systemInstruction,
         });
 
-        // ✨ 仕組みの理解が活きる場所：毎回これまでの全履歴を整形して渡す
         const formattedHistory = messages.slice(1).map((m) => ({
           role: m.role,
           parts: [{ text: m.text }],
         }));
 
-        // 新しいキーでセッションを再作成
         chatRef.current = model.startChat({ history: formattedHistory });
 
-        // メッセージ送信
         const result = await chatRef.current.sendMessage(userText);
         botText = await result.response.text();
 
         success = true;
-        break; // 成功したらループを抜ける
+        break;
       } catch (error) {
         console.warn(
           `[送信エラー] APIキー ${i + 1}番目が失敗しました。切り替えます。`,
@@ -184,7 +191,23 @@ export const GoalFormAndChat: React.FC = () => {
       setMessages((prev) => [...prev, { role: "model", text: botText }]);
 
       if (botText.includes("【決定した目標】")) {
-        console.log("目標設定完了！右側UI等への書き込み処理へ");
+        try {
+          const purposeMatch = botText.match(/・真の目的：(.*)/);
+          const fieldMatch = botText.match(/・注力する分野：(.*)/);
+          const periodMatch = botText.match(/・目標取得時期：(.*)/);
+
+          if (purposeMatch && fieldMatch && periodMatch) {
+            // ⭕ フォームで入力された qualificationName も一緒に親へ渡す
+            onGoalComplete({
+              qualification: qualificationName,
+              purpose: purposeMatch[1].trim(),
+              field: fieldMatch[1].trim(),
+              period: periodMatch[1].trim(),
+            });
+          }
+        } catch (err) {
+          console.error("目標テキストの解析に失敗しました", err);
+        }
       }
     } else {
       setMessages((prev) => [
@@ -196,21 +219,15 @@ export const GoalFormAndChat: React.FC = () => {
   };
 
   const handleResetChat = () => {
-    // ① LocalStorageからチャット履歴の引き出しを完全に削除
     localStorage.removeItem("chat_history");
-
-    // ② ReactのメッセージStateを空っぽにリセット
     setMessages([]);
-
-    // ③ 画面のステップを最初の入力フォーム画面に戻す
     setStep("form");
+    onGoalReset();
   };
 
-  // --- 画面レンダリング ---
   return (
     <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
       {step === "form" ? (
-        /* --- ステップ1〜3：UI入力フォーム --- */
         <form
           onSubmit={handleStartChat}
           style={{ display: "flex", flexDirection: "column", gap: "15px" }}
@@ -285,7 +302,11 @@ export const GoalFormAndChat: React.FC = () => {
             padding: "15px",
           }}
         >
-          <h3>🎯 資格取得の目的を明確にする対話</h3>
+          {/* タイボウ横のボタンを消去してシンプルに */}
+          <div style={{ marginBottom: "10px" }}>
+            <h3 style={{ margin: 0 }}>🎯 資格取得の目的を明確にする対話</h3>
+          </div>
+
           <div
             style={{
               height: "400px",
@@ -319,22 +340,30 @@ export const GoalFormAndChat: React.FC = () => {
               </div>
             ))}
             {isLoading && (
-              <div style={{ color: "#999" }}>先輩AIが思考中...</div>
+              <div style={{ color: "#999", margin: "10px 0" }}>
+                先輩AIが思考中...
+              </div>
             )}
-            <button
-              type="button"
-              onClick={handleResetChat}
-              style={{
-                padding: "5px 10px",
-                backgroundColor: "#ff4d4f",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              最初からやり直す
-            </button>
+
+            {/* ⭕ 修正点：ボタンをチャットログの「一番下」の定位置へ戻しました */}
+            <div style={{ textAlign: "center", marginTop: "15px" }}>
+              <button
+                type="button"
+                onClick={handleResetChat}
+                style={{
+                  padding: "6px 12px",
+                  backgroundColor: "#ff4d4f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                }}
+              >
+                最初からやり直す
+              </button>
+            </div>
+
             <div ref={chatEndRef} />
           </div>
 
