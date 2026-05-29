@@ -1,8 +1,9 @@
 import { useState } from "react";
 import "./App.css";
 import { GoalFormAndChat } from "./components/GoalFormAndChat.tsx";
+import { Consultation } from "./components/Consultation.tsx"; // ⭕ 名前を変更
+import { TaskManager } from "./components/TaskManager.tsx"; // ⭕ 追加
 
-// ⭕ qualification（資格名）を型定義に追加
 interface FinalGoal {
   qualification: string;
   purpose: string;
@@ -11,6 +12,11 @@ interface FinalGoal {
 }
 
 function App() {
+  // ⭕ "goal" | "task" | "consult" の3つのメニューで切り替え
+  const [activeMenu, setActiveMenu] = useState<"goal" | "task" | "consult">(
+    "goal",
+  );
+
   const [currentGoal, setCurrentGoal] = useState<FinalGoal | null>(() => {
     const saved = localStorage.getItem("final_goal");
     return saved ? JSON.parse(saved) : null;
@@ -36,16 +42,36 @@ function App() {
         <h3>メニュー</h3>
         <ul style={{ listStyle: "none", padding: 0 }}>
           <li
+            onClick={() => setActiveMenu("goal")}
             style={{
-              marginBottom: "10px",
-              fontWeight: "bold",
-              color: "#007bff",
+              marginBottom: "15px",
+              fontWeight: activeMenu === "goal" ? "bold" : "normal",
+              color: activeMenu === "goal" ? "#007bff" : "#666",
+              cursor: "pointer",
             }}
           >
             🎯 目的の設定
           </li>
-          <li style={{ marginBottom: "10px", color: "#666" }}>📝 タスク管理</li>
-          <li style={{ marginBottom: "10px", color: "#666" }}>
+          <li
+            onClick={() => setActiveMenu("task")}
+            style={{
+              marginBottom: "15px",
+              fontWeight: activeMenu === "task" ? "bold" : "normal",
+              color: activeMenu === "task" ? "#007bff" : "#666",
+              cursor: "pointer",
+            }}
+          >
+            📝 タスク管理
+          </li>
+          <li
+            onClick={() => setActiveMenu("consult")}
+            style={{
+              marginBottom: "15px",
+              fontWeight: activeMenu === "consult" ? "bold" : "normal",
+              color: activeMenu === "consult" ? "#007bff" : "#666",
+              cursor: "pointer",
+            }}
+          >
             💬 モチベ低下時の相談
           </li>
         </ul>
@@ -56,10 +82,18 @@ function App() {
         className="main-content"
         style={{ width: "55%", padding: "20px", overflowY: "auto" }}
       >
-        <GoalFormAndChat
-          onGoalComplete={handleGoalComplete}
-          onGoalReset={handleGoalReset}
-        />
+        {activeMenu === "goal" && (
+          <GoalFormAndChat
+            onGoalComplete={handleGoalComplete}
+            onGoalReset={handleGoalReset}
+          />
+        )}
+        {activeMenu === "task" && <TaskManager />}
+        {activeMenu === "consult" && (
+          <Consultation
+            currentQualification={currentGoal?.qualification || ""}
+          />
+        )}
       </main>
 
       {/* 【右側】：サポート ＆ キャラクターエリア */}
@@ -84,8 +118,6 @@ function App() {
           }}
         >
           <strong>今の目標：</strong>
-
-          {/* ⭕ 修正点：currentGoalがある時に「目指す資格」を表示するように変更 */}
           {currentGoal ? (
             <div style={{ marginTop: "10px", fontSize: "14px", color: "#555" }}>
               <p
@@ -131,7 +163,7 @@ function App() {
           <div style={{ fontSize: "40px", marginBottom: "10px" }}>🤖</div>
           <p style={{ margin: 0, fontSize: "14px" }}>
             {currentGoal
-              ? "「バッチリ目標が決まったね！応援してるよ！」"
+              ? "「目標に向かって一歩ずつ進もう！応援してるよ！」"
               : "「まずは中央の画面で、あなたのことを教えてね！」"}
           </p>
         </div>
