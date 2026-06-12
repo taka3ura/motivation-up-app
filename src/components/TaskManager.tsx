@@ -25,7 +25,7 @@ export const TaskManager: React.FC = () => {
     "この積み重ねが大きな力になるよ！👍",
   ];
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleAddTask = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!mainInput.trim() || !smallInput.trim()) return;
 

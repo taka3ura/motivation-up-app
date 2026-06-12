@@ -1,0 +1,26 @@
+/* メニューアイテムの基本スタイル */
+.sidebar-menu-item {
+  margin-bottom: 15px;
+  padding: 10px 14px; /* 💡 背景色が付いたときに綺麗に見えるよう、内側に余白を作ります */
+  border-radius: 8px; /* 💡 角を少し丸くすると一気にお洒落になります */
+  cursor: pointer;
+  color: #666; /* デフォルトの文字色 */
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease; /* 👈 フワッと切り替える魔法の1行 */
+}
+
+/* 🔥 マウスが乗ったとき（ホバー）のスタイル */
+.sidebar-menu-item:hover {
+  background-color: var(
+    --accent-bg
+  ); /* index.cssの紫色の透明度付き背景を使用 */
+  color: var(--accent); /* 文字色もアクセントカラーの紫に変更 */
+}
+
+/* 🎯 現在選択されているメニューのスタイル */
+.sidebar-menu-item.active {
+  font-weight: bold;
+  background-color: var(--accent-bg); /* アクティブ時も背景を付ける */
+  color: var(--accent); /* 文字色をアクセントの紫に */
+}

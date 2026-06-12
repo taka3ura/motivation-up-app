@@ -76,7 +76,7 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
 【決定した目標】
 ・真の目的：[ステップ5・6で言語化したメリット]
 ・気になる分野：[ステップ4で選んだ分野]
-------------資格取得時期：[ステップ6で決めた時期]
+・資格取得時期：[ステップ6で決めた時期]
 ---`;
 
   // 常に最新のメッセージにスクロール
@@ -193,16 +193,18 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
       if (botText.includes("【決定した目標】")) {
         try {
           const purposeMatch = botText.match(/・真の目的：(.*)/);
-          const fieldMatch = botText.match(/・注力する分野：(.*)/);
-          const periodMatch = botText.match(/・目標取得時期：(.*)/);
+          const fieldMatch = botText.match(/・気になる分野：(.*)/);
+          const periodMatch = botText.match(/・資格取得時期：(.*)/);
 
           if (purposeMatch && fieldMatch && periodMatch) {
+            const rawPeriod = periodMatch[1].replace(/（.*月.*）/, "").trim();
+            const formattedPeriod = calculateTargetDate(rawPeriod);
             // ⭕ フォームで入力された qualificationName も一緒に親へ渡す
             onGoalComplete({
               qualification: qualificationName,
               purpose: purposeMatch[1].trim(),
               field: fieldMatch[1].trim(),
-              period: periodMatch[1].trim(),
+              period: formattedPeriod,
             });
           }
         } catch (err) {
@@ -223,6 +225,43 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     setMessages([]);
     setStep("form");
     onGoalReset();
+  };
+
+  // 日本語の期間から具体的な日付を計算する関数
+  const calculateTargetDate = (periodText: string): string => {
+    const now = new Date(); // 今日の日付を取得
+
+    // 1. まず「半年」が含まれているか判定（含まれていればベースとして6ヶ月追加）
+    if (periodText.includes("半年")) {
+      now.setMonth(now.getMonth() + 6);
+    }
+
+    // 2. 「○年」を判定して加算（独立した if にすることで「半年」や「月」と併用可能に）
+    const yearMatch = periodText.match(/(\d+)年/);
+    if (yearMatch) {
+      const yearsToAdd = parseInt(yearMatch[1], 10);
+      now.setFullYear(now.getFullYear() + yearsToAdd);
+    }
+
+    // 3. 「○ヶ月」を判定して加算
+    const monthMatch = periodText.match(/(\d+)ヶ月/);
+    if (monthMatch) {
+      const monthsToAdd = parseInt(monthMatch[1], 10);
+      now.setMonth(now.getMonth() + monthsToAdd);
+    }
+
+    // 4. いずれのキーワードにもヒットしなかった場合のフォールバック
+    if (!periodText.includes("半年") && !yearMatch && !monthMatch) {
+      // 「来月末」や具体的な日付が直接入っているなど、自動計算できない場合はそのまま返す
+      return periodText;
+    }
+
+    // 計算後の日付を「〇年〇月〇日」の形に整形
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 月は0から始まるので+1する
+    const date = now.getDate();
+
+    return `${year}年${month}月${date}日`;
   };
 
   return (
