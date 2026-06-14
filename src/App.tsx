@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { GoalFormAndChat } from "./components/GoalFormAndChat.tsx";
 import { Consultation } from "./components/Consultation.tsx";
@@ -9,6 +9,7 @@ interface FinalGoal {
   purpose: string; // 資格を取る目的
   field: string; // 興味のある分野
   period: string; // いつまでに達成したいか
+  summary?: string; // 会話の要約（プロンプト用）
 }
 
 const AutoResizeTextarea = ({
@@ -30,22 +31,10 @@ const AutoResizeTextarea = ({
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    // 一度高さをリセットして正しいスクロール高さを計算できるようにする
     textarea.style.height = "auto";
-
-    // 1行の高さ（約24px）を基準に、最大3行（約72px）までに制限する計算
-    const lineHeight = 24;
-    const maxHeight = lineHeight * 3; // 3行分の高さ
-    const scrollHeight = textarea.scrollHeight;
-
-    if (scrollHeight <= maxHeight) {
-      textarea.style.height = `${scrollHeight}px`;
-      textarea.style.overflowY = "hidden"; // 3行以下のときはスクロールバーを隠す
-    } else {
-      textarea.style.height = `${maxHeight}px`;
-      textarea.style.overflowY = "scroll"; // 3行を超えたらスクロールバーを出す
-    }
-  }, [value]); // 文字が書き換わるたびに実行
+    textarea.style.height = `${textarea.scrollHeight}px`;
+    textarea.style.overflowY = "hidden";
+  }, [value]);
 
   return (
     <textarea
@@ -54,8 +43,9 @@ const AutoResizeTextarea = ({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
-      rows={1} // 初期値は1行
-      style={{ ...style, lineHeight: "24px" }} // 行の高さを固定して計算を安定させる
+      rows={1}
+      maxLength={100}
+      style={{ ...style, lineHeight: "24px" }}
     />
   );
 };
@@ -70,17 +60,34 @@ function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [isChatComplete, setIsChatComplete] = useState<boolean>(() => {
+    return localStorage.getItem("chat_complete") === "true";
+  });
+
+  const [copied, setCopied] = useState(false);
+
   const handleGoalComplete = (goal: FinalGoal) => {
     setCurrentGoal(goal);
     localStorage.setItem("final_goal", JSON.stringify(goal));
   };
 
-  const handleGoalReset = () => {
-    setCurrentGoal(null);
-    localStorage.removeItem("final_goal");
+  const handleChatCompleteStatus = (complete: boolean) => {
+    setIsChatComplete(complete);
+    localStorage.setItem("chat_complete", complete ? "true" : "false");
   };
 
-  // 右側のインライン編集フィールドで文字が書き換わった時の自動保存処理
+  // 🧹 親側で全データを一元リセットする関数
+  const handleGoalReset = () => {
+    setCurrentGoal(null);
+    setIsChatComplete(false);
+    localStorage.removeItem("final_goal");
+    localStorage.removeItem("chat_complete");
+    localStorage.removeItem("chat_history"); // チャット履歴も確実に消去
+
+    // 画面を確実に「目標設定（goal）」に戻してリフレッシュさせる
+    setActiveMenu("goal");
+  };
+
   const handleInputChange = (key: string, value: string) => {
     if (!currentGoal) return;
 
@@ -93,39 +100,98 @@ function App() {
     localStorage.setItem("final_goal", JSON.stringify(updatedGoal));
   };
 
-  // 入力フィールドの共通デザイン（枠線を透明にしてテキストっぽく見せる）
+  const handleCopyPrompt = () => {
+    if (!currentGoal) return;
+
+    const promptText = `あなたは優秀なキャリアメンター、およびエンジニアリングのコーチです。
+現在開発中の目標設定アプリでのチャット内容を引き継いで、ユーザーのさらに深い相談や壁打ちに付き合ってください。
+
+以下の【現在の状況】を前提知識として頭に入れ、ユーザーのモチベーション向上や、さらに具体的なアクションプランに落とし込むための「深掘りの質問」を1つずつ投げてください。
+
+【現在の状況】
+🏷️ 目指す資格: ${currentGoal.qualification}
+🌈 目的: ${currentGoal.purpose}
+📖 興味のある分野: ${currentGoal.field}
+📅 時期: ${currentGoal.period}
+
+準備ができたら、引き継ぎを歓迎する一言と、最初の深掘り質問をお願いします。`;
+
+    navigator.clipboard.writeText(promptText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const calculateRemainingDays = (periodText: string): string => {
+    if (!periodText) return "";
+    const matches = periodText.match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+    if (!matches) return "（正確な日付を入力すると残り日数が出ます）";
+
+    const year = parseInt(matches[1], 10);
+    const month = parseInt(matches[2], 10) - 1;
+    const day = parseInt(matches[3], 10);
+
+    const targetDate = new Date(year, month, day);
+    const today = new Date();
+
+    targetDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = targetDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0) return `⏳ 目標達成まであと ${diffDays} 日`;
+    if (diffDays === 0) return "🎉 ついに目標達成の当日です！";
+    return `✅ 目標の期日から ${Math.abs(diffDays)} 日経過しています`;
+  };
+
   const inputStyle: React.CSSProperties = {
     background: "transparent",
     border: "none",
-    borderBottom: "1px dashed transparent",
     fontSize: "14px",
     fontFamily: "inherit",
     color: "#444",
     width: "100%",
-    padding: "2px 4px",
-    margin: "0",
+    padding: "6px 8px",
+    margin: "4px 0 0 0",
     outline: "none",
     resize: "none",
     display: "block",
+    borderRadius: "4px",
+    transition: "background-color 0.15s ease",
+    boxSizing: "border-box",
   };
 
-  // クリックしてフォーカスが当たった時と、外れた時の背景・下線の変化
-  const handleFocus = (e: React.FocusEvent<any>) => {
-    e.target.style.borderBottom = "1px dashed #e67e22";
-    e.target.style.backgroundColor = "#fff";
+  const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    e.target.style.backgroundColor = "#fffdf3";
   };
 
-  const handleBlur = (e: React.FocusEvent<any>) => {
-    e.target.style.borderBottom = "1px dashed transparent";
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
     e.target.style.backgroundColor = "transparent";
   };
 
   return (
-    <div className="app-container" style={{ display: "flex", height: "100vh" }}>
-      {/* 【左側】：メニューバー */}
+    <div
+      className="app-container"
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        backgroundColor: "#fff",
+        width: "100%",
+      }}
+    >
+      {/* 🟢 【左側】：メニューバー */}
       <aside
         className="sidebar"
-        style={{ width: "20%", borderRight: "3px solid #eee", padding: "20px" }}
+        style={{
+          width: "20%",
+          borderRight: "3px solid #eee",
+          padding: "20px",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          boxSizing: "border-box",
+        }}
       >
         <h3>メニュー</h3>
         <ul style={{ listStyle: "none", padding: 0 }}>
@@ -150,32 +216,121 @@ function App() {
         </ul>
       </aside>
 
-      {/* 【中央】：メインコンテンツ */}
+      {/* 🟢 【中央】：メインコンテンツエリア */}
       <main
         className="main-content"
-        style={{ width: "55%", padding: "20px", overflowY: "auto" }}
+        style={{
+          width: "55%",
+          minWidth: "0",
+          height: "100vh",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+        }}
       >
-        {activeMenu === "goal" && (
-          <GoalFormAndChat
-            onGoalComplete={handleGoalComplete}
-            onGoalReset={handleGoalReset}
-          />
-        )}
-        {activeMenu === "task" && <TaskManager />}
-        {activeMenu === "consult" && (
-          <Consultation
-            currentQualification={currentGoal?.qualification || ""}
-          />
+        <div
+          className="content-body"
+          style={{
+            flexGrow: 1,
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            minHeight: "0",
+          }}
+        >
+          {activeMenu === "goal" && (
+            <GoalFormAndChat
+              onGoalComplete={handleGoalComplete}
+              onGoalReset={handleGoalReset}
+              isChatComplete={isChatComplete}
+              onChatCompleteStatus={handleChatCompleteStatus}
+            />
+          )}
+          {activeMenu === "task" && (
+            <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
+              <TaskManager />
+            </div>
+          )}
+          {activeMenu === "consult" && (
+            <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
+              <Consultation
+                currentQualification={currentGoal?.qualification || ""}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* 下部ボタンエリア */}
+        {activeMenu === "goal" && currentGoal && (
+          <div
+            style={{
+              padding: "0 20px 20px 20px",
+              backgroundColor: "#fff",
+              borderTop: "1px solid #eee",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                justifyContent: "center",
+                marginTop: "15px",
+              }}
+            >
+              <button
+                onClick={handleGoalReset}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "6px",
+                  border: "1px solid #dc3545",
+                  backgroundColor: "#fff",
+                  color: "#dc3545",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                🔄 最初からやり直す
+              </button>
+              <button
+                onClick={handleCopyPrompt}
+                disabled={!isChatComplete}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: isChatComplete ? "#e67e22" : "#ccc",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  cursor: isChatComplete ? "pointer" : "not-allowed",
+                  fontSize: "14px",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {copied
+                  ? "✅ コピーしました！"
+                  : "📋 对話の要約プロンプトをコピー"}
+              </button>
+            </div>
+          </div>
         )}
       </main>
 
-      {/* 【右側】：サポート ＆ キャラクターエリア */}
+      {/* 🟢 【右側】：サポート ＆ キャラクターエリア */}
       <aside
         className="support-bar"
         style={{
           width: "25%",
           borderLeft: "3px solid #eee",
           padding: "20px",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
@@ -191,26 +346,23 @@ function App() {
             textAlign: "left",
           }}
         >
-          <h4 style={{ margin: "0 0 10px 0", color: "#856404" }}>
-            現在の目標設定
-          </h4>
-
           {currentGoal ? (
             <div
               style={{
-                marginTop: "10px",
                 fontSize: "14px",
                 color: "#555",
                 display: "flex",
                 flexDirection: "column",
-                gap: "10px",
+                gap: "12px",
+                boxSizing: "border-box",
               }}
             >
+              {/* 1. 目指す資格 */}
               <div>
                 <p
                   style={{
-                    margin: "0 0 2px 0",
-                    fontSize: "15px",
+                    margin: "0",
+                    fontSize: "14px",
                     fontWeight: "bold",
                     color: "#333",
                   }}
@@ -233,10 +385,11 @@ function App() {
                 />
               </div>
 
+              {/* 2. 目的 */}
               <div>
                 <p
                   style={{
-                    margin: "0 0 2px 0",
+                    margin: "0",
                     fontWeight: "bold",
                     color: "#333",
                   }}
@@ -252,10 +405,11 @@ function App() {
                 />
               </div>
 
+              {/* 3. 興味のある分野 */}
               <div>
                 <p
                   style={{
-                    margin: "0 0 2px 0",
+                    margin: "0",
                     fontWeight: "bold",
                     color: "#333",
                   }}
@@ -271,10 +425,11 @@ function App() {
                 />
               </div>
 
+              {/* 4. 時期 */}
               <div>
                 <p
                   style={{
-                    margin: "0 0 2px 0",
+                    margin: "0",
                     fontWeight: "bold",
                     color: "#333",
                   }}
@@ -288,6 +443,21 @@ function App() {
                   onBlur={handleBlur}
                   style={inputStyle}
                 />
+
+                <div
+                  style={{
+                    marginTop: "8px",
+                    padding: "6px 12px",
+                    backgroundColor: isChatComplete ? "#e67e22" : "#ccc",
+                    color: "#fff",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    display: "inline-block",
+                  }}
+                >
+                  {calculateRemainingDays(currentGoal.period)}
+                </div>
               </div>
             </div>
           ) : (
@@ -310,7 +480,9 @@ function App() {
           <div style={{ fontSize: "40px", marginBottom: "10px" }}>🤖</div>
           <p style={{ margin: 0, fontSize: "14px" }}>
             {currentGoal
-              ? "「目標に向かって一歩ずつ進もう！応援してるよ！」"
+              ? isChatComplete
+                ? "「素晴らしい目標が固まったね！プロンプトを持ってさらに深掘りしてみよう！」"
+                : "「目標に向かって一歩ずつ進おう！応援してるよ！」"
               : "「まずは中央の画面で、あなたのことを教えてね！」"}
           </p>
         </div>
