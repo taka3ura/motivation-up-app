@@ -169,6 +169,11 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     e.preventDefault();
     if (!isFormValid()) return;
 
+    console.log(
+      "読み込んだAPIキーの先頭数文字:",
+      API_KEYS.map((k) => (k ? k.substring(0, 5) : "NULL")),
+    );
+
     setIsLoading(true);
     setStep("chat");
 
@@ -235,7 +240,10 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
       parts: [{ text: m.text }],
     }));
 
-    const historyPayload = formattedHistory.slice(0, -1);
+    let historyPayload = formattedHistory.slice(0, -1);
+    if (historyPayload.length > 0 && historyPayload[0].role === "model") {
+      historyPayload = historyPayload.slice(1);
+    }
 
     for (let i = 0; i < API_KEYS.length; i++) {
       try {
@@ -253,8 +261,15 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
         botText = await result.response.text();
         success = true;
         break;
-      } catch (error) {
-        console.warn(`[送信エラー] APIキー ${i + 1}番目が失敗しました。`);
+      } catch (error: any) {
+        // エラーの内容を具体的に表示させる
+        console.error(`[APIエラー] ${i + 1}番目のキーで失敗:`, error);
+        // もしAPIからの返答があればそれも表示
+        if (error.response) {
+          error.response
+            .json()
+            .then((json: any) => console.error("詳細:", json));
+        }
       }
     }
 
