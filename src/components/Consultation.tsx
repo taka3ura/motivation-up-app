@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-interface Message {
-  role: "user" | "model";
-  text: string;
-}
+import { sendChat, type ChatMessage as Message } from "../lib/gemini";
+import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
 
 interface ConsultationHistory {
   id: string;
@@ -16,11 +12,6 @@ interface ConsultationHistory {
     solution: string;
   };
 }
-
-const API_KEYS = [
-  import.meta.env.VITE_GEMINI_API_KEY_1,
-  import.meta.env.VITE_GEMINI_API_KEY_2,
-];
 
 interface ConsultationProps {
   currentQualification: string;
@@ -40,8 +31,9 @@ export const Consultation: React.FC<ConsultationProps> = ({
     return saved ? JSON.parse(saved) : [];
   });
 
-  const chatRef = useRef<any>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatBoxRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useAutoResizeTextarea(input, 120, step);
 
   const categories = [
     { id: "difficult", label: "😫 内容が難しくて挫折しそう…" },
@@ -50,8 +42,11 @@ export const Consultation: React.FC<ConsultationProps> = ({
     { id: "lost", label: "❓ なぜこの勉強をしてるか分からなくなった…" },
   ];
 
+  // チャット欄の中だけを最下部へスクロールする（scrollIntoViewだとページ全体も動いてしまう）
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const box = chatBoxRef.current;
+    if (!box) return;
+    box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   // 💡 AIに提案させる具体的なライフハックの引き出し
@@ -91,25 +86,16 @@ export const Consultation: React.FC<ConsultationProps> = ({
     // ⭕ 1発目をuserの発言として定義する（Gemini SDKのエラールール対策）
     const initialPrompt = `相談を開始します。私は今、「${categoryLabel}」という悩みを抱えています。先輩、話を聞いてください。`;
 
-    for (let i = 0; i < API_KEYS.length; i++) {
-      try {
-        const currentKey = API_KEYS[i];
-        if (!currentKey) continue;
-
-        const tempGenAI = new GoogleGenerativeAI(currentKey);
-        const model = tempGenAI.getGenerativeModel({
-          model: "gemini-2.5-flash-lite",
-          systemInstruction: systemInstruction,
-        });
-
-        chatRef.current = model.startChat({ history: [] });
-        const result = await chatRef.current.sendMessage(initialPrompt);
-        botText = await result.response.text();
-        success = true;
-        break;
-      } catch (error) {
-        console.warn(`[相談開始エラー] キー ${i + 1}番目失敗:`, error);
-      }
+    try {
+      botText = await sendChat({
+        systemInstruction,
+        history: [],
+        message: initialPrompt,
+        label: "相談開始",
+      });
+      success = true;
+    } catch {
+      // 全キー失敗時は下のエラーメッセージを表示
     }
 
     if (success) {
@@ -127,6 +113,16 @@ export const Consultation: React.FC<ConsultationProps> = ({
       ]);
     }
     setIsLoading(false);
+  };
+
+  // Enterで送信、Shift+Enterで改行
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 日本語変換中のEnterキーは無視するガード
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      formRef.current?.requestSubmit();
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -147,31 +143,17 @@ export const Consultation: React.FC<ConsultationProps> = ({
     let botText = "";
     let success = false;
 
-    for (let i = 0; i < API_KEYS.length; i++) {
-      try {
-        const currentKey = API_KEYS[i];
-        if (!currentKey) continue;
-
-        const tempGenAI = new GoogleGenerativeAI(currentKey);
-        const model = tempGenAI.getGenerativeModel({
-          model: "gemini-2.5-flash-lite",
-          systemInstruction: systemInstruction,
-        });
-
-        // ⭕ 正しい履歴形式（最初がuser）にマッピングしてチャットセッションに渡す
-        const formattedHistory = messages.map((m) => ({
-          role: m.role,
-          parts: [{ text: m.text }],
-        }));
-
-        chatRef.current = model.startChat({ history: formattedHistory });
-        const result = await chatRef.current.sendMessage(userText);
-        botText = await result.response.text();
-        success = true;
-        break;
-      } catch (error) {
-        console.warn(`[相談送信エラー] キー ${i + 1}番目失敗:`, error);
-      }
+    try {
+      // ⭕ 履歴は最初がuserの形式（messages）のまま渡す
+      botText = await sendChat({
+        systemInstruction,
+        history: messages,
+        message: userText,
+        label: "相談送信",
+      });
+      success = true;
+    } catch {
+      // 全キー失敗時は下のエラー処理へ
     }
 
     if (success) {
@@ -294,6 +276,7 @@ export const Consultation: React.FC<ConsultationProps> = ({
             </div>
 
             <div
+              ref={chatBoxRef}
               style={{
                 height: "300px",
                 overflowY: "auto",
@@ -338,30 +321,44 @@ export const Consultation: React.FC<ConsultationProps> = ({
                   先輩AIが言葉を選んでいます...
                 </div>
               )}
-              <div ref={chatEndRef} />
             </div>
 
             <form
+              ref={formRef}
               onSubmit={handleSendMessage}
-              style={{ display: "flex", gap: "10px" }}
+              style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}
             >
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="先輩に気持ちを打ち明けてみて..."
+                onKeyDown={handleKeyDown}
+                placeholder="先輩に気持ちを打ち明けてみて... (Enterで送信 / Shift+Enterで改行)"
                 disabled={isLoading}
+                rows={1}
                 style={{
                   flexGrow: 1,
-                  padding: "8px",
-                  borderRadius: "4px",
+                  padding: "10px",
+                  borderRadius: "6px",
                   border: "1px solid #ccc",
+                  fontSize: "14px",
+                  resize: "none",
+                  minHeight: "38px",
+                  lineHeight: "1.4",
+                  fontFamily: "inherit",
+                  boxSizing: "border-box",
+                  wordBreak: "break-all",
                 }}
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                style={{ padding: "8px 16px", cursor: "pointer" }}
+                style={{
+                  padding: "8px 16px",
+                  height: "38px",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
               >
                 話す
               </button>

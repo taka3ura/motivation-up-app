@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import "./App.css";
 import { GoalFormAndChat } from "./components/GoalFormAndChat.tsx";
 import { Consultation } from "./components/Consultation.tsx";
@@ -6,10 +13,9 @@ import { TaskManager } from "./components/TaskManager.tsx";
 
 interface FinalGoal {
   qualification: string; // 目指す資格
-  purpose: string; // 資格を取る目的
-  field: string; // 興味のある分野
-  period: string; // いつまでに達成したいか
-  summary?: string; // 会話の要約（プロンプト用）
+  challenge: string; // 現状の課題
+  idealFuture: string; // 理想の未来
+  deadline: string; // 期限
 }
 
 const AutoResizeTextarea = ({
@@ -27,13 +33,15 @@ const AutoResizeTextarea = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  // useLayoutEffect を使うことで、ブラウザが描画する直前に高さ計算を行う
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    // 高さをリセットしてから再計算
     textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-    textarea.style.overflowY = "hidden";
+    // 最小の高さを確保しつつ、現在のテキスト量に合わせる
+    textarea.style.height = `${Math.max(24, textarea.scrollHeight)}px`;
   }, [value]);
 
   return (
@@ -43,17 +51,20 @@ const AutoResizeTextarea = ({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
-      rows={1}
+      // rows={1} を削除（これがブラウザ側の計算と干渉する原因になることがあります）
       maxLength={100}
-      style={{ ...style, lineHeight: "24px" }}
+      style={{
+        ...style,
+        overflow: "hidden", // これで不要なスクロールバーを消す
+        resize: "none", // ユーザーによるサイズ変更を禁止
+      }}
     />
   );
 };
 
 function App() {
-  const [activeMenu, setActiveMenu] = useState<"goal" | "task" | "consult">(
-    "goal",
-  );
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const [currentGoal, setCurrentGoal] = useState<FinalGoal | null>(() => {
     const saved = localStorage.getItem("final_goal");
@@ -63,8 +74,6 @@ function App() {
   const [isChatComplete, setIsChatComplete] = useState<boolean>(() => {
     return localStorage.getItem("chat_complete") === "true";
   });
-
-  const [copied, setCopied] = useState(false);
 
   const handleGoalComplete = (goal: FinalGoal) => {
     setCurrentGoal(goal);
@@ -85,7 +94,7 @@ function App() {
     localStorage.removeItem("chat_history"); // チャット履歴も確実に消去
 
     // 画面を確実に「目標設定（goal）」に戻してリフレッシュさせる
-    setActiveMenu("goal");
+    navigate("/goal");
   };
 
   const handleInputChange = (key: string, value: string) => {
@@ -98,28 +107,6 @@ function App() {
 
     setCurrentGoal(updatedGoal);
     localStorage.setItem("final_goal", JSON.stringify(updatedGoal));
-  };
-
-  const handleCopyPrompt = () => {
-    if (!currentGoal) return;
-
-    const promptText = `あなたは優秀なキャリアメンター、およびエンジニアリングのコーチです。
-現在開発中の目標設定アプリでのチャット内容を引き継いで、ユーザーのさらに深い相談や壁打ちに付き合ってください。
-
-以下の【現在の状況】を前提知識として頭に入れ、ユーザーのモチベーション向上や、さらに具体的なアクションプランに落とし込むための「深掘りの質問」を1つずつ投げてください。
-
-【現在の状況】
-🏷️ 目指す資格: ${currentGoal.qualification}
-🌈 目的: ${currentGoal.purpose}
-📖 興味のある分野: ${currentGoal.field}
-📅 時期: ${currentGoal.period}
-
-準備ができたら、引き継ぎを歓迎する一言と、最初の深掘り質問をお願いします。`;
-
-    navigator.clipboard.writeText(promptText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
   };
 
   const calculateRemainingDays = (periodText: string): string => {
@@ -196,26 +183,25 @@ function App() {
         <h3>メニュー</h3>
         <ul style={{ listStyle: "none", padding: 0 }}>
           <li
-            onClick={() => setActiveMenu("goal")}
-            className={`sidebar-menu-item ${activeMenu === "goal" ? "active" : ""}`}
+            onClick={() => navigate("/goal")}
+            className={`sidebar-menu-item ${pathname === "/goal" ? "active" : ""}`}
           >
             🎯 目的の設定
           </li>
           <li
-            onClick={() => setActiveMenu("task")}
-            className={`sidebar-menu-item ${activeMenu === "task" ? "active" : ""}`}
+            onClick={() => navigate("/task")}
+            className={`sidebar-menu-item ${pathname === "/task" ? "active" : ""}`}
           >
             📝 タスク管理
           </li>
           <li
-            onClick={() => setActiveMenu("consult")}
-            className={`sidebar-menu-item ${activeMenu === "consult" ? "active" : ""}`}
+            onClick={() => navigate("/consult")}
+            className={`sidebar-menu-item ${pathname === "/consult" ? "active" : ""}`}
           >
             💬 モチベ低下時の相談
           </li>
         </ul>
       </aside>
-
       {/* 🟢 【中央】：メインコンテンツエリア */}
       <main
         className="main-content"
@@ -240,86 +226,46 @@ function App() {
             minHeight: "0",
           }}
         >
-          {activeMenu === "goal" && (
-            <GoalFormAndChat
-              onGoalComplete={handleGoalComplete}
-              onGoalReset={handleGoalReset}
-              isChatComplete={isChatComplete}
-              onChatCompleteStatus={handleChatCompleteStatus}
+          <Routes>
+            <Route path="/" element={<Navigate to="/goal" replace />} />
+            <Route
+              path="/goal"
+              element={
+                <GoalFormAndChat
+                  onGoalComplete={handleGoalComplete}
+                  onGoalReset={handleGoalReset}
+                  isChatComplete={isChatComplete}
+                  onChatCompleteStatus={handleChatCompleteStatus}
+                />
+              }
             />
-          )}
-          {activeMenu === "task" && (
-            <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
-              <TaskManager />
-            </div>
-          )}
-          {activeMenu === "consult" && (
-            <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
-              <Consultation
-                currentQualification={currentGoal?.qualification || ""}
-              />
-            </div>
-          )}
+            <Route
+              path="/task"
+              element={
+                <div
+                  style={{ padding: "20px", overflowY: "auto", height: "100%" }}
+                >
+                  <TaskManager />
+                </div>
+              }
+            />
+            <Route
+              path="/consult"
+              element={
+                <div
+                  style={{ padding: "20px", overflowY: "auto", height: "100%" }}
+                >
+                  <Consultation
+                    currentQualification={currentGoal?.qualification || ""}
+                  />
+                </div>
+              }
+            />
+            {/* 存在しないURLは目的の設定へ */}
+            <Route path="*" element={<Navigate to="/goal" replace />} />
+          </Routes>
         </div>
-
-        {/* 下部ボタンエリア */}
-        {activeMenu === "goal" && currentGoal && (
-          <div
-            style={{
-              padding: "0 20px 20px 20px",
-              backgroundColor: "#fff",
-              borderTop: "1px solid #eee",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                justifyContent: "center",
-                marginTop: "15px",
-              }}
-            >
-              <button
-                onClick={handleGoalReset}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: "6px",
-                  border: "1px solid #dc3545",
-                  backgroundColor: "#fff",
-                  color: "#dc3545",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
-              >
-                🔄 最初からやり直す
-              </button>
-              <button
-                onClick={handleCopyPrompt}
-                disabled={!isChatComplete}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: isChatComplete ? "#e67e22" : "#ccc",
-                  color: "#fff",
-                  fontWeight: "bold",
-                  cursor: isChatComplete ? "pointer" : "not-allowed",
-                  fontSize: "14px",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                {copied
-                  ? "✅ コピーしました！"
-                  : "📋 对話の要約プロンプトをコピー"}
-              </button>
-            </div>
-          </div>
-        )}
       </main>
-
       {/* 🟢 【右側】：サポート ＆ キャラクターエリア */}
       <aside
         className="support-bar"
@@ -353,20 +299,12 @@ function App() {
                 color: "#555",
                 display: "flex",
                 flexDirection: "column",
-                gap: "12px",
-                boxSizing: "border-box",
+                gap: "4px",
               }}
             >
               {/* 1. 目指す資格 */}
               <div>
-                <p
-                  style={{
-                    margin: "0",
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    color: "#333",
-                  }}
-                >
+                <p style={{ margin: "0", fontWeight: "bold", color: "#333" }}>
                   🏷️ 目指す資格:
                 </p>
                 <AutoResizeTextarea
@@ -385,65 +323,52 @@ function App() {
                 />
               </div>
 
-              {/* 2. 目的 */}
+              {/* 2. 現状の課題 */}
               <div>
-                <p
-                  style={{
-                    margin: "0",
-                    fontWeight: "bold",
-                    color: "#333",
-                  }}
-                >
-                  🌈 目的:
+                <p style={{ margin: "0", fontWeight: "bold", color: "#333" }}>
+                  ⚠️ 現状の課題:
                 </p>
                 <AutoResizeTextarea
-                  value={currentGoal.purpose}
-                  onChange={(e) => handleInputChange("purpose", e.target.value)}
+                  value={currentGoal.challenge}
+                  onChange={(e) =>
+                    handleInputChange("challenge", e.target.value)
+                  }
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   style={inputStyle}
                 />
               </div>
 
-              {/* 3. 興味のある分野 */}
+              {/* 3. 理想の未来 */}
               <div>
-                <p
-                  style={{
-                    margin: "0",
-                    fontWeight: "bold",
-                    color: "#333",
-                  }}
-                >
-                  📖 興味のある分野:
+                <p style={{ margin: "0", fontWeight: "bold", color: "#333" }}>
+                  🌈 理想の未来:
                 </p>
                 <AutoResizeTextarea
-                  value={currentGoal.field}
-                  onChange={(e) => handleInputChange("field", e.target.value)}
+                  value={currentGoal.idealFuture}
+                  onChange={(e) =>
+                    handleInputChange("idealFuture", e.target.value)
+                  }
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   style={inputStyle}
                 />
               </div>
 
-              {/* 4. 時期 */}
+              {/* 4. 期限 */}
               <div>
-                <p
-                  style={{
-                    margin: "0",
-                    fontWeight: "bold",
-                    color: "#333",
-                  }}
-                >
-                  📅 時期:
+                <p style={{ margin: "0", fontWeight: "bold", color: "#333" }}>
+                  📅 期限:
                 </p>
                 <AutoResizeTextarea
-                  value={currentGoal.period}
-                  onChange={(e) => handleInputChange("period", e.target.value)}
+                  value={currentGoal.deadline}
+                  onChange={(e) =>
+                    handleInputChange("deadline", e.target.value)
+                  }
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   style={inputStyle}
                 />
-
                 <div
                   style={{
                     marginTop: "8px",
@@ -456,7 +381,7 @@ function App() {
                     display: "inline-block",
                   }}
                 >
-                  {calculateRemainingDays(currentGoal.period)}
+                  {calculateRemainingDays(currentGoal.deadline)}
                 </div>
               </div>
             </div>
@@ -481,7 +406,7 @@ function App() {
           <p style={{ margin: 0, fontSize: "14px" }}>
             {currentGoal
               ? isChatComplete
-                ? "「素晴らしい目標が固まったね！プロンプトを持ってさらに深掘りしてみよう！」"
+                ? "「素晴らしい目標が固まったね！応援してるよ！」"
                 : "「目標に向かって一歩ずつ進おう！応援してるよ！」"
               : "「まずは中央の画面で、あなたのことを教えてね！」"}
           </p>

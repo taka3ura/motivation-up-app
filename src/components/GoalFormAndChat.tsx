@@ -1,23 +1,32 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+import {
+  sendChat,
+  generateText,
+  type ChatMessage as Message,
+} from "../lib/gemini";
 
-interface Message {
-  role: "user" | "model";
-  text: string;
+// 今日の日付を "YYYY-MM-DD" で返す。toISOStringはUTC基準で日本の早朝に前日になるため、端末のローカル時間で組み立てる
+const getTodayDateString = () => {
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${mm}-${dd}`;
+};
+
+// AIが返す "YYYY-MM-DD" を表示用の "YYYY/MM/DD" に変える。日付の形でなければそのまま返す
+const formatDeadline = (deadline: string) =>
+  /^\d{4}-\d{1,2}-\d{1,2}$/.test(deadline) ? deadline.replace(/-/g, "/") : deadline;
+
+interface FinalGoal {
+  qualification: string;
+  challenge: string;
+  idealFuture: string;
+  deadline: string;
 }
 
-const API_KEYS = [
-  import.meta.env.VITE_GEMINI_API_KEY_1,
-  import.meta.env.VITE_GEMINI_API_KEY_2,
-];
-
 interface GoalFormAndChatProps {
-  onGoalComplete: (goal: {
-    qualification: string;
-    purpose: string;
-    field: string;
-    period: string;
-  }) => void;
+  onGoalComplete: (goal: FinalGoal) => void;
   onGoalReset: () => void;
   isChatComplete: boolean;
   onChatCompleteStatus: (complete: boolean) => void;
@@ -36,8 +45,8 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
   const [studentStudy, setStudentStudy] = useState("");
   const [otherJob, setOtherJob] = useState("");
   const [otherTargetJob, setOtherTargetJob] = useState("");
-
   const [qualificationName, setQualificationName] = useState("");
+
   const [messages, setMessages] = useState<Message[]>(() => {
     const savedMessages = localStorage.getItem("chat_history");
     return savedMessages ? JSON.parse(savedMessages) : [];
@@ -48,20 +57,35 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const chatRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null); // textareaからの送信制御用
+  const textareaRef = useAutoResizeTextarea(input, 120, step);
 
   const systemInstruction = `あなた（Gemini）は、資格学習者の「内発的動機付け」を引き出す優秀なAIメンターコーチです。
-ユーザーが入力した属性や興味をベースに、以下の【4つのステップ】を意識して、1往復につき1つの質問で優しく深掘りしてください。
+
+【今日の日付】
+今日は${getTodayDateString()}です。「来年の春」「半年後」など期限が相対的に語られた場合は、必ずこの日付を基準に「何年何月」へ換算してください。期限は今日より未来の日付になります。あなた自身の知識にある年を今年だと思い込まないでください。
+
+【最初に与えられたユーザー情報】
+- ユーザー属性: ${userType}（${userType === "学生" ? studentFaculty + " / " + studentStudy : otherJob + " -> " + otherTargetJob}）
+- 目標資格: ${qualificationName}
 
 【対話の4ステップ】
-ステップ1：なぜその資格を取りたいのか、きっかけや「現在の関心・課題」を紐解く
-ステップ2：資格を取った後、それをどう活かしたいか「未来の理想像」を具体化する
-ステップ3：目標を達成するための「具体的な時期・期限」のイメージを固める
-ステップ4：これまでの対話から、興味のある分野を含めた「最終的な目標の要約」を提示する
+1. なぜ「${qualificationName}」が必要なのか、きっかけを深掘り（ユーザー属性を元に具体的に質問する）
+2. 資格を取った後、その属性でどう活躍したいか「未来の理想像」の具体化
+3. 目標を達成するための「具体的な期限」のイメージ固め
+4. これまでの対話から、以下の形式で「目標設定」を要約し、最後に「目標設定が完了しました」と出力する。
 
-※対話が十分に進み、まとめや要約、終わりの挨拶を伝える際には、必ず文章の最後やどこかに「目標設定が完了しました」または「対話を終了します」というキーワードを含めてください。`;
+【要約フォーマット】
+--------------------------------------
+【目標の要約】
+- 資格: ${qualificationName}
+- 現状の課題: （ユーザーの入力に基づく）
+- 理想の未来: （ユーザーの入力に基づく）
+- 達成期限: （ユーザーの入力に基づき、今日の日付から換算した「YYYY年M月」の形式）
+--------------------------------------
+  
+※常に上記のユーザー情報を念頭に置き、文脈がずれないように注意してください。`;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,33 +99,47 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
 
   // AIメッセージからの完了検知
   useEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 || isChatComplete) return;
+
     const lastMessage = messages[messages.length - 1];
 
-    if (lastMessage.role === "model") {
-      const text = lastMessage.text;
-      if (
-        text.includes("目標設定が完了しました") ||
-        text.includes("対話を終了します") ||
-        text.includes("お疲れ様でした") ||
-        text.includes("これで深掘りは完了")
-      ) {
-        if (!isChatComplete) {
+    if (
+      lastMessage.role === "model" &&
+      (lastMessage.text.includes("目標設定が完了しました") ||
+        lastMessage.text.includes("対話を終了します") ||
+        lastMessage.text.includes("お疲れ様でした") ||
+        lastMessage.text.includes("これで深掘りは完了"))
+    ) {
+      const finalizeGoal = async () => {
+        setIsLoading(true);
+        try {
+          const summary = await summarizeGoalWithRetry(messages);
           onChatCompleteStatus(true);
 
-          const fieldSummary =
-            userType === "学生"
-              ? `${studentFaculty} (${studentStudy})`
-              : `${otherJob} -> 希望: ${otherTargetJob}`;
-
+          // 確定データの通知
           onGoalComplete({
-            qualification: qualificationName || "登録された資格",
-            purpose: "対話から自動要約された目的",
-            field: fieldSummary,
-            period: "2026/12/31",
+            qualification: qualificationName || summary.qualification,
+            challenge: summary.challenge, // purposeから修正
+            idealFuture: summary.idealFuture,
+            deadline: formatDeadline(summary.deadline),
           });
+        } catch (error) {
+          console.error("要約に失敗しました:", error);
+          onChatCompleteStatus(true);
+
+          // 失敗時は最低限の情報で登録
+          onGoalComplete({
+            qualification: qualificationName || "不明",
+            challenge: "対話から抽出失敗",
+            idealFuture: "未定義",
+            deadline: "未定",
+          });
+        } finally {
+          setIsLoading(false);
         }
-      }
+      };
+
+      finalizeGoal();
     }
   }, [
     messages,
@@ -112,8 +150,6 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     otherJob,
     otherTargetJob,
     qualificationName,
-    onChatCompleteStatus,
-    onGoalComplete,
   ]);
 
   // 全部やり直す処理
@@ -134,19 +170,27 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
 
   // プロンプトをコピーする処理
   const handleCopyPrompt = () => {
-    if (!isChatComplete) return;
+    // 1. 全会話履歴をフォーマットする
+    const historyText = messages
+      .map((m) => `${m.role === "user" ? "ユーザー" : "AI"}: ${m.text}`)
+      .join("\n\n");
 
-    const summaryText = `【これまでの対話の要約】
-資格: ${qualificationName}
-区分: ${userType}
-詳細: ${userType === "学生" ? `${studentFaculty} (${studentStudy})` : `${otherJob} -> 希望: ${otherTargetJob}`}
+    // 2. コピー用プロンプトの組み立て
+    const fullPrompt = `【これまでの対話履歴】
+${historyText}
 
-対話履歴から導き出された目標設定が完了しました。この内容をベースにさらに壁打ちを続けます。`;
+---
+【指示】
+これまでの対話履歴を踏まえて、資格学習者の「内発的動機付け」を引き出すAIメンターとして対話を続けてください。
+資格取得の目的をさらに明確にするために、深掘りを行ってください。`;
 
+    // 3. クリップボードへコピー
     navigator.clipboard
-      .writeText(summaryText)
+      .writeText(fullPrompt)
       .then(() => {
-        alert("対話の要約プロンプトをクリップボードにコピーしました！");
+        alert(
+          "全対話履歴と続きの指示をコピーしました！他のAIに貼り付けて対話を再開してください。",
+        );
       })
       .catch((err) => {
         console.error("コピーに失敗しました: ", err);
@@ -169,11 +213,6 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     e.preventDefault();
     if (!isFormValid()) return;
 
-    console.log(
-      "読み込んだAPIキーの先頭数文字:",
-      API_KEYS.map((k) => (k ? k.substring(0, 5) : "NULL")),
-    );
-
     setIsLoading(true);
     setStep("chat");
 
@@ -187,27 +226,16 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     let botText = "";
     let success = false;
 
-    for (let i = 0; i < API_KEYS.length; i++) {
-      try {
-        const currentKey = API_KEYS[i];
-        if (!currentKey) continue;
-
-        const tempGenAI = new GoogleGenerativeAI(currentKey);
-        const model = tempGenAI.getGenerativeModel({
-          model: "gemini-2.5-flash-lite",
-          systemInstruction: systemInstruction,
-        });
-
-        chatRef.current = model.startChat({ history: [] });
-        const result = await chatRef.current.sendMessage(
-          `対話を開始してください。${userIntroduction}今回は「${qualificationName}」という資格について、取得する目的や背景を深掘りしたいです。まずは【ステップ1】として、この資格に挑戦しようと思ったきっかけや、普段学んでいること・お仕事とどう繋がっているのか、最初の問いかけ（質問）を1つ投げてください。`,
-        );
-        botText = await result.response.text();
-        success = true;
-        break;
-      } catch (error) {
-        console.warn(`[開始エラー] APIキー ${i + 1}番目が失敗しました。`);
-      }
+    try {
+      botText = await sendChat({
+        systemInstruction,
+        history: [],
+        message: `対話を開始してください。${userIntroduction}今回は「${qualificationName}」という資格について、取得する目的や背景を深掘りしたいです。まずは【ステップ1】として、この資格に挑戦しようと思ったきっかけや、普段学んでいること・お仕事とどう繋がっているのか、最初の問いかけ（質問）を1つ投げてください。`,
+        label: "開始",
+      });
+      success = true;
+    } catch {
+      // 全キー失敗時は下のエラーメッセージを表示
     }
 
     if (success) {
@@ -235,42 +263,22 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     let botText = "";
     let success = false;
 
-    const formattedHistory = updatedMessages.map((m) => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.text }],
-    }));
-
-    let historyPayload = formattedHistory.slice(0, -1);
+    // 今回の発言を除いた履歴を渡す。Geminiは履歴の先頭がuserである必要があるため、先頭のmodel発言は除く
+    let historyPayload = updatedMessages.slice(0, -1);
     if (historyPayload.length > 0 && historyPayload[0].role === "model") {
       historyPayload = historyPayload.slice(1);
     }
 
-    for (let i = 0; i < API_KEYS.length; i++) {
-      try {
-        const currentKey = API_KEYS[i];
-        if (!currentKey) continue;
-
-        const tempGenAI = new GoogleGenerativeAI(currentKey);
-        const model = tempGenAI.getGenerativeModel({
-          model: "gemini-2.5-flash-lite",
-          systemInstruction: systemInstruction,
-        });
-
-        chatRef.current = model.startChat({ history: historyPayload });
-        const result = await chatRef.current.sendMessage(userText);
-        botText = await result.response.text();
-        success = true;
-        break;
-      } catch (error: any) {
-        // エラーの内容を具体的に表示させる
-        console.error(`[APIエラー] ${i + 1}番目のキーで失敗:`, error);
-        // もしAPIからの返答があればそれも表示
-        if (error.response) {
-          error.response
-            .json()
-            .then((json: any) => console.error("詳細:", json));
-        }
-      }
+    try {
+      botText = await sendChat({
+        systemInstruction,
+        history: historyPayload,
+        message: userText,
+        label: "送信",
+      });
+      success = true;
+    } catch {
+      // 全キー失敗時は下のエラーメッセージを表示
     }
 
     if (success) {
@@ -304,21 +312,40 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     }
   };
 
-  const handleForceComplete = () => {
-    onChatCompleteStatus(true);
-    const fieldSummary =
-      userType === "学生"
-        ? `${studentFaculty} (${studentStudy})`
-        : `${otherJob} -> 希望: ${otherTargetJob}`;
+  const summarizeGoalWithRetry = async (history: Message[]) => {
+    // --- 修正箇所: 配列の最後のメッセージだけを対象にする ---
+    const lastMessage = history[history.length - 1];
+    const targetText = lastMessage.text;
 
-    onGoalComplete({
-      qualification: qualificationName || "登録された資格",
-      purpose: "対話から要約された目的",
-      field: fieldSummary,
-      period: "2026-12-31",
-    });
+    const prompt = `以下の対話から、ユーザーの資格取得目標を抽出し、JSON形式で返してください。
+【重要】
+1. 出力はJSON形式のみ。前置き不要。
+2. 今日の日付は${getTodayDateString()}です。期限(deadline)はこの日付を基準に算出し、必ず "YYYY-MM-DD" 形式で出力してください。「来年の春」のような表現は、今日より未来の日付に直してください。
+{ 
+  "qualification": "資格名", 
+  "challenge": "現状の課題やきっかけ", 
+  "idealFuture": "資格取得後の理想の姿", 
+  "deadline": "達成期限(YYYY-MM-DD)" 
+}
+対話内容: ${targetText}`;
+
+    // AIの返答がJSONとして読めない場合もあるため、数回やり直す
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const text = await generateText(prompt, "要約");
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("JSONが見つかりません");
+
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error(`要約エラー詳細 (${attempt}/${MAX_ATTEMPTS}回目):`, e);
+      }
+    }
+    throw new Error("要約に失敗しました");
   };
 
+  // 画面描画
   return (
     <div
       style={{
@@ -470,7 +497,7 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                     type="text"
                     value={studentStudy}
                     onChange={(e) => setStudentStudy(e.target.value)}
-                    placeholder="例：Kansei工学、UIデザイン、JavaでのWeb開発"
+                    placeholder="例：プログラミング、Webアプリ開発、英語、数学"
                     required
                     style={{
                       width: "100%",
@@ -505,7 +532,7 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                     type="text"
                     value={otherJob}
                     onChange={(e) => setOtherJob(e.target.value)}
-                    placeholder="例：営業職、求職中、一般事務、フリーランス"
+                    placeholder="例：営業職、求職中、一般事務"
                     required
                     style={{
                       width: "100%",
@@ -534,7 +561,7 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                     type="text"
                     value={otherTargetJob}
                     onChange={(e) => setOtherTargetJob(e.target.value)}
-                    placeholder="例：フルスタックエンジニア、マーケティング職"
+                    placeholder="例：事務職、SE"
                     required
                     style={{
                       width: "100%",
@@ -567,7 +594,7 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                 type="text"
                 value={qualificationName}
                 onChange={(e) => setQualificationName(e.target.value)}
-                placeholder="例：ITパスポート、基本情報技術者"
+                placeholder="例：ITパスポート、簿記3級"
                 required
                 style={{
                   width: "100%",
@@ -698,8 +725,8 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
               >
                 🎉 <strong>目標設定の対話が完了しました！</strong>
                 <br />
-                「対話の要約プロンプトをコピー」ボタンがアンロックされました。
-                コピーして外部のAIに貼り付けることで、さらに深い壁打ちを続けられます！
+                「これまでの対話をコピー」ボタンがアンロックされました。
+                コピーして自分のAIに貼り付けることで、さらに深い壁打ちを続けられます！
               </div>
             )}
 
@@ -724,8 +751,9 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                     : "メッセージを入力... (Enterで送信 / Shift+Enterで改行)"
                 }
                 disabled={isLoading || isChatComplete}
-                // 入力された改行の数に応じて rows を 1〜5行 まで動的に変化させる
-                rows={Math.min(5, input.split("\n").length || 1)}
+                ref={textareaRef}
+                // 高さは useLayoutEffect で内容に合わせて調整する（改行・自動折り返しの両方に対応）
+                rows={1}
                 style={{
                   flexGrow: 1,
                   padding: "10px",
@@ -779,6 +807,8 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
               <button
                 type="button"
                 onClick={handleResetAll}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 style={{
                   flex: 1,
                   padding: "10px 14px",
@@ -800,6 +830,8 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                 type="button"
                 onClick={handleCopyPrompt}
                 disabled={!isChatComplete}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.7")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 style={{
                   flex: 1,
                   padding: "10px 14px",
@@ -814,25 +846,9 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
                   transition: "background-color 0.2s",
                 }}
               >
-                📋 プロンプトをコピー
+                📋 これまでの対話をコピー
               </button>
             </div>
-
-            {!isChatComplete && messages.length > 2 && (
-              <span
-                onClick={handleForceComplete}
-                style={{
-                  fontSize: "11px",
-                  color: "#bbb",
-                  textAlign: "right",
-                  marginTop: "8px",
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                }}
-              >
-                [デバッグ用: 対話を強制終了する]
-              </span>
-            )}
           </div>
         </div>
       )}
