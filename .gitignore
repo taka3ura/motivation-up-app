@@ -26,3 +26,7 @@ dist-ssr
 .env
 # Firebase local cache
 .firebase/
+
+# 未使用のFirebase関連（今は使っていない）
+functions/
+src/firebaseConfig.ts
