@@ -12,7 +12,7 @@ import { Consultation } from "./components/Consultation.tsx";
 import { TaskManager } from "./components/TaskManager.tsx";
 
 interface FinalGoal {
-  qualification: string; // 目指す資格
+  topic: string; // 頑張りたいこと
   challenge: string; // 現状の課題
   idealFuture: string; // 理想の未来
   deadline: string; // 期限
@@ -44,6 +44,18 @@ const AutoResizeTextarea = ({
     textarea.style.height = `${Math.max(24, textarea.scrollHeight)}px`;
   }, [value]);
 
+  // 編集できることに気づいてもらうため、ホバー時にうっすら背景色を付ける
+  const handleMouseEnter = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (document.activeElement !== e.currentTarget) {
+      e.currentTarget.style.backgroundColor = "#fff8e1";
+    }
+  };
+  const handleMouseLeave = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (document.activeElement !== e.currentTarget) {
+      e.currentTarget.style.backgroundColor = "transparent";
+    }
+  };
+
   return (
     <textarea
       ref={textareaRef}
@@ -51,12 +63,19 @@ const AutoResizeTextarea = ({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
-      // rows={1} を削除（これがブラウザ側の計算と干渉する原因になることがあります）
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      title="クリックして編集できます"
+      // rows=1を指定しないと、ブラウザの初期値(2行分)が基準になり、
+      // 短い内容でも下に余計な余白ができてしまう
+      rows={1}
       maxLength={100}
       style={{
         ...style,
         overflow: "hidden", // これで不要なスクロールバーを消す
         resize: "none", // ユーザーによるサイズ変更を禁止
+        cursor: "text",
+        transition: "background-color 0.15s ease",
       }}
     />
   );
@@ -255,9 +274,7 @@ function App() {
                 <div
                   style={{ padding: "20px", overflowY: "auto", height: "100%" }}
                 >
-                  <Consultation
-                    currentQualification={currentGoal?.qualification || ""}
-                  />
+                  <Consultation goal={currentGoal} />
                 </div>
               }
             />
@@ -302,15 +319,26 @@ function App() {
                 gap: "4px",
               }}
             >
-              {/* 1. 目指す資格 */}
+              <p
+                style={{
+                  margin: "0 0 4px 0",
+                  fontSize: "12px",
+                  lineHeight: "1.3",
+                  color: "#9a7b1f",
+                }}
+              >
+                ✏️ 項目をクリックすると、内容を直接編集できます
+              </p>
+
+              {/* 1. 頑張りたいこと */}
               <div>
                 <p style={{ margin: "0", fontWeight: "bold", color: "#333" }}>
-                  🏷️ 目指す資格:
+                  🏷️ 頑張りたいこと:
                 </p>
                 <AutoResizeTextarea
-                  value={currentGoal.qualification}
+                  value={currentGoal.topic}
                   onChange={(e) =>
-                    handleInputChange("qualification", e.target.value)
+                    handleInputChange("topic", e.target.value)
                   }
                   onFocus={handleFocus}
                   onBlur={handleBlur}
@@ -390,26 +418,6 @@ function App() {
               （チャット完了後に目標がここに表示されます）
             </p>
           )}
-        </div>
-
-        <div
-          className="character-area"
-          style={{
-            border: "1px solid #ddd",
-            padding: "15px",
-            borderRadius: "8px",
-            textAlign: "center",
-            backgroundColor: "#f9f9f9",
-          }}
-        >
-          <div style={{ fontSize: "40px", marginBottom: "10px" }}>🤖</div>
-          <p style={{ margin: 0, fontSize: "14px" }}>
-            {currentGoal
-              ? isChatComplete
-                ? "「素晴らしい目標が固まったね！応援してるよ！」"
-                : "「目標に向かって一歩ずつ進おう！応援してるよ！」"
-              : "「まずは中央の画面で、あなたのことを教えてね！」"}
-          </p>
         </div>
       </aside>
     </div>

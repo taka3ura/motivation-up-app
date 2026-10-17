@@ -24,3 +24,19 @@
   background-color: var(--accent-bg); /* アクティブ時も背景を付ける */
   color: var(--accent); /* 文字色をアクセントの紫に */
 }
+
+/* 🌱 区分を選んだあとに続く項目を、フワッと下から出す */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-slide-in {
+  animation: fadeSlideIn 0.25s ease-out;
+}

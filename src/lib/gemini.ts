@@ -14,6 +14,9 @@ const API_KEYS: string[] = [
 export interface ChatMessage {
   role: "user" | "model";
   text: string;
+  // AIに実際に送る文章が、画面に表示したい文章と違う場合だけ指定する
+  // （例：画面には選んだ悩みの一言だけ見せ、AIには定型文で始めさせたい場合）
+  apiText?: string;
 }
 
 // 全キーを順に試し、最初に成功した結果を返す。全て失敗したら例外を投げる
@@ -49,7 +52,7 @@ export function sendChat(params: {
     const chat = model.startChat({
       history: history.map((m) => ({
         role: m.role,
-        parts: [{ text: m.text }],
+        parts: [{ text: m.apiText ?? m.text }],
       })),
     });
     const result = await chat.sendMessage(message);
