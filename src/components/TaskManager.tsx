@@ -10,6 +10,14 @@ interface Task {
   completedAt?: number;
 }
 
+// 今日の日付を "YYYY-MM-DD" で返す（端末のローカル時間を基準にする）
+const getTodayDateString = () => {
+  const today = new Date();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${mm}-${dd}`;
+};
+
 interface AutoResizeTextareaProps {
   t: Task;
   isFocused: boolean;
@@ -88,7 +96,6 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
         outline: "none",
         backgroundColor: "transparent",
         color: t.isCompleted ? "#a0aec0" : "#2c3e50",
-        textDecoration: t.isCompleted ? "line-through" : "none",
         fontFamily: "inherit",
         resize: "none",
         overflow: "hidden",
@@ -125,10 +132,8 @@ export const TaskManager: React.FC = () => {
   const [isClearingMemo, setIsClearingMemo] = useState(false);
 
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
 
   const [deletingTaskIds, setDeletingTaskIds] = useState<string[]>([]);
-  const [completingTaskIds, setCompletingTaskIds] = useState<string[]>([]);
   const [movingTaskIds, setMovingTaskIds] = useState<string[]>([]);
   const [addingTaskId, setAddingTaskId] = useState<string | null>(null);
 
@@ -145,11 +150,21 @@ export const TaskManager: React.FC = () => {
   const praiseTimerRef = useRef<any>(null);
 
   const memoContainerRef = useRef<HTMLDivElement>(null);
-  const completedContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem("daily_tasks_v2", JSON.stringify(tasks));
   }, [tasks]);
+
+  // 日付が変わっていたら、完了済みタスクを一掃する（今日の分だけ見えるようにする）
+  useEffect(() => {
+    const today = getTodayDateString();
+    const lastActiveDate = localStorage.getItem("tasks_last_active_date");
+    if (lastActiveDate && lastActiveDate !== today) {
+      setTasks((prev) => prev.filter((t) => !t.isCompleted));
+    }
+    localStorage.setItem("tasks_last_active_date", today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (memoRef.current && isMemoOpen) {
@@ -258,9 +273,11 @@ export const TaskManager: React.FC = () => {
     const targetTask = tasks.find((t) => t.id === id);
     if (!targetTask) return;
 
-    if (!targetTask.isCompleted) {
-      setCompletingTaskIds((prev) => [...prev, id]);
+    // タスクはその場に残るので、即チェック状態に切り替える
+    // （以前はここで別の完了欄へ移動する前提の消滅アニメーションを挟んでいた）
+    executeToggleComplete(id);
 
+    if (!targetTask.isCompleted) {
       if (praiseTimerRef.current) clearTimeout(praiseTimerRef.current);
 
       const nextPhrase =
@@ -270,19 +287,14 @@ export const TaskManager: React.FC = () => {
       praiseTimerRef.current = setTimeout(() => {
         changePraiseMessageWithAnimation(defaultAdvice, false);
       }, 2500);
-
-      setTimeout(() => {
-        executeToggleComplete(id);
-        setCompletingTaskIds((prev) => prev.filter((cId) => cId !== id));
-      }, 200);
-    } else {
-      executeToggleComplete(id);
     }
   };
 
   const executeToggleComplete = (id: string) => {
-    setTasks((currentTasks) => {
-      const nextTasks = currentTasks.map((t) => {
+    // 完了してもタスクは消さず、その場にチェック済みの見た目で残す
+    // （日付が変わったタイミングで、まとめて片付ける）
+    setTasks((currentTasks) =>
+      currentTasks.map((t) => {
         if (t.id === id) {
           const nextState = !t.isCompleted;
           return {
@@ -292,16 +304,8 @@ export const TaskManager: React.FC = () => {
           };
         }
         return t;
-      });
-      const completed = nextTasks
-        .filter((t) => t.isCompleted)
-        .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
-      if (completed.length > 5) {
-        const keepIds = new Set(completed.slice(0, 5).map((t) => t.id));
-        return nextTasks.filter((t) => !t.isCompleted || keepIds.has(t.id));
-      }
-      return nextTasks;
-    });
+      }),
+    );
   };
 
   const handleDeleteTaskWithAnimation = (id: string) => {
@@ -335,11 +339,9 @@ export const TaskManager: React.FC = () => {
     )
       return;
 
-    const activeTasks = tasks.filter((t) => !t.isCompleted);
-    const completedTasks = tasks.filter((t) => t.isCompleted);
-
-    const todayTasks = activeTasks.filter((t) => t.isToday);
-    const generalTasks = activeTasks.filter((t) => !t.isToday);
+    // 完了済みも含めて、見えている位置どおりに並び替える
+    const todayTasks = tasks.filter((t) => t.isToday);
+    const generalTasks = tasks.filter((t) => !t.isToday);
 
     let draggedTask: Task;
     if (source.droppableId === "todayList") {
@@ -358,23 +360,16 @@ export const TaskManager: React.FC = () => {
       generalTasks.splice(destination.index, 0, draggedTask);
     }
 
-    setTasks([...todayTasks, ...generalTasks, ...completedTasks]);
+    setTasks([...todayTasks, ...generalTasks]);
   };
 
-  const activeTasks = tasks.filter((t) => !t.isCompleted);
-  const todayTasks = activeTasks.filter((t) => t.isToday);
-  const generalTasks = activeTasks.filter((t) => !t.isToday);
-  const completedTasks = tasks
-    .filter((t) => t.isCompleted)
-    .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+  // 完了済みタスクも、各リストの中にそのまま残して表示する
+  const todayTasks = tasks.filter((t) => t.isToday);
+  const generalTasks = tasks.filter((t) => !t.isToday);
 
   const memoMaxHeight = isMemoOpen
     ? `${memoContainerRef.current?.scrollHeight || 160}px`
     : "0px";
-  const completedMaxHeight =
-    showCompleted && completedTasks.length > 0
-      ? `${completedContainerRef.current?.scrollHeight || 200}px`
-      : "0px";
 
   // 👈 DNDの手を離した時のアニメーション速度をハックして最速化するヘルパー関数
   const getSpeedyDropStyle = (style: any, snapshot: any) => {
@@ -555,142 +550,20 @@ export const TaskManager: React.FC = () => {
         >
           {/* 🔥 今日やるタスク */}
           <section>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                margin: "0 0 10px 0",
-              }}
-            >
+            <div style={{ margin: "0 0 4px 0" }}>
               <h3 style={{ fontSize: "15px", margin: 0, color: "#e67e22" }}>
                 🔥 今日やるタスク
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowCompleted(!showCompleted)}
-                style={{
-                  backgroundColor: showCompleted ? "#edf2f7" : "transparent",
-                  color: "#718096",
-                  border: "1px solid #cbd5e0",
-                  borderRadius: "6px",
-                  padding: "3px 8px",
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <span>済</span>
-                <span
-                  style={{
-                    backgroundColor: "#a0aec0",
-                    color: "#fff",
-                    borderRadius: "10px",
-                    padding: "1px 6px",
-                    fontSize: "10px",
-                  }}
-                >
-                  {completedTasks.length}
-                </span>
-                <span
-                  style={{
-                    display: "inline-block",
-                    transform: showCompleted
-                      ? "rotate(0deg)"
-                      : "rotate(180deg)",
-                    transition: "transform 0.2s ease",
-                  }}
-                >
-                  ▲
-                </span>
-              </button>
             </div>
-
-            <div
+            <p
               style={{
-                maxHeight: completedMaxHeight,
-                opacity: showCompleted && completedTasks.length > 0 ? 1 : 0,
-                overflow: "hidden",
-                transition:
-                  "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease",
+                margin: "0 0 10px 0",
+                fontSize: "11px",
+                color: "#a0aec0",
               }}
             >
-              <div
-                ref={completedContainerRef}
-                style={{ paddingBottom: "15px" }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    padding: "10px",
-                    backgroundColor: "#f7fafc",
-                    borderRadius: "6px",
-                    border: "1px dashed #cbd5e0",
-                  }}
-                >
-                  {completedTasks.map((t) => {
-                    const isDeleting = deletingTaskIds.includes(t.id);
-                    return (
-                      <div
-                        key={t.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          padding: "6px 10px",
-                          opacity: isDeleting ? 0 : 0.7,
-                          maxHeight: isDeleting ? "0px" : "100px",
-                          overflow: "hidden",
-                          transform: isDeleting ? "scale(0.95)" : "scale(1)",
-                          transition: "all 0.2s ease-in-out",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={t.isCompleted}
-                          onChange={() =>
-                            handleToggleCompleteWithAnimation(t.id)
-                          }
-                          style={{
-                            marginRight: "10px",
-                            width: "18px",
-                            height: "18px",
-                            cursor: "pointer",
-                          }}
-                        />
-                        <AutoResizeTextarea
-                          t={t}
-                          isFocused={false}
-                          onUpdateText={handleUpdateTaskText}
-                          onBlurTask={handleBlurTask}
-                          onEnterPress={handleCreateEmptyTask}
-                          onBackspaceEmpty={handleBackspaceEmptyTask}
-                          onArrowKeyPress={handleArrowKeyPress}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTaskWithAnimation(t.id)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "#e74c3c",
-                            cursor: "pointer",
-                            marginLeft: "10px",
-                            fontSize: "14px",
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+              ✅ 完了したタスクはチェック済みのまま残ります（日付が変わると自動で消えます）
+            </p>
 
             <Droppable droppableId="todayList">
               {(provided) => (
@@ -706,10 +579,9 @@ export const TaskManager: React.FC = () => {
                 >
                   {todayTasks.map((t, index) => {
                     const isDeleting = deletingTaskIds.includes(t.id);
-                    const isCompleting = completingTaskIds.includes(t.id);
                     const isMoving = movingTaskIds.includes(t.id);
                     const isAdding = addingTaskId === t.id;
-                    const isAnimating = isDeleting || isCompleting || isMoving;
+                    const isAnimating = isDeleting || isMoving;
 
                     return (
                       <Draggable key={t.id} draggableId={t.id} index={index}>
@@ -724,6 +596,18 @@ export const TaskManager: React.FC = () => {
                             )}
                           >
                             <div
+                              onMouseEnter={(e) => {
+                                if (!snapshot.isDragging) {
+                                  e.currentTarget.style.backgroundColor =
+                                    "#ffe9d2";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!snapshot.isDragging) {
+                                  e.currentTarget.style.backgroundColor =
+                                    "#fff9f2";
+                                }
+                              }}
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -749,7 +633,7 @@ export const TaskManager: React.FC = () => {
                                     ? "translateY(-10px)"
                                     : "scale(1)",
                                 transition:
-                                  "max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.2s ease, transform 0.2s ease",
+                                  "max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.2s ease, transform 0.2s ease, background-color 0.15s ease",
                               }}
                             >
                               <div
@@ -781,6 +665,23 @@ export const TaskManager: React.FC = () => {
                                   height: "18px",
                                   flexShrink: 0,
                                   cursor: "pointer",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  borderRadius: "50%",
+                                  border: t.isCompleted
+                                    ? "2px solid var(--accent)"
+                                    : "2px solid #cbd5e0",
+                                  backgroundColor: t.isCompleted
+                                    ? "var(--accent)"
+                                    : "#fff",
+                                  backgroundImage: t.isCompleted
+                                    ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.3 3.3 6 10.6 2.7 7.3 1.3 8.7l4.7 4.7 8.7-8.7z'/%3E%3C/svg%3E\")"
+                                    : "none",
+                                  backgroundSize: "12px",
+                                  backgroundRepeat: "no-repeat",
+                                  backgroundPosition: "center",
+                                  transition:
+                                    "background-color 0.15s ease, border-color 0.15s ease",
                                 }}
                               />
                               <AutoResizeTextarea
@@ -843,6 +744,12 @@ export const TaskManager: React.FC = () => {
             <button
               type="button"
               onClick={() => handleCreateEmptyTask(true)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#ffe9d2";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#fffaf0";
+              }}
               style={{
                 width: "100%",
                 padding: "6px",
@@ -855,6 +762,7 @@ export const TaskManager: React.FC = () => {
                 fontSize: "13px",
                 fontWeight: "bold",
                 textAlign: "left",
+                transition: "background-color 0.15s ease",
               }}
             >
               ＋ 今日やるタスクを追加
@@ -883,10 +791,9 @@ export const TaskManager: React.FC = () => {
                 >
                   {generalTasks.map((t, index) => {
                     const isDeleting = deletingTaskIds.includes(t.id);
-                    const isCompleting = completingTaskIds.includes(t.id);
                     const isMoving = movingTaskIds.includes(t.id);
                     const isAdding = addingTaskId === t.id;
-                    const isAnimating = isDeleting || isCompleting || isMoving;
+                    const isAnimating = isDeleting || isMoving;
 
                     return (
                       <Draggable key={t.id} draggableId={t.id} index={index}>
@@ -901,6 +808,18 @@ export const TaskManager: React.FC = () => {
                             )}
                           >
                             <div
+                              onMouseEnter={(e) => {
+                                if (!snapshot.isDragging) {
+                                  e.currentTarget.style.backgroundColor =
+                                    "#ececec";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!snapshot.isDragging) {
+                                  e.currentTarget.style.backgroundColor =
+                                    "#fafafa";
+                                }
+                              }}
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -926,7 +845,7 @@ export const TaskManager: React.FC = () => {
                                     ? "translateY(-10px)"
                                     : "scale(1)",
                                 transition:
-                                  "max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.2s ease, transform 0.2s ease",
+                                  "max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.2s ease, transform 0.2s ease, background-color 0.15s ease",
                               }}
                             >
                               <div
@@ -958,6 +877,23 @@ export const TaskManager: React.FC = () => {
                                   height: "18px",
                                   flexShrink: 0,
                                   cursor: "pointer",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  borderRadius: "50%",
+                                  border: t.isCompleted
+                                    ? "2px solid var(--accent)"
+                                    : "2px solid #cbd5e0",
+                                  backgroundColor: t.isCompleted
+                                    ? "var(--accent)"
+                                    : "#fff",
+                                  backgroundImage: t.isCompleted
+                                    ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.3 3.3 6 10.6 2.7 7.3 1.3 8.7l4.7 4.7 8.7-8.7z'/%3E%3C/svg%3E\")"
+                                    : "none",
+                                  backgroundSize: "12px",
+                                  backgroundRepeat: "no-repeat",
+                                  backgroundPosition: "center",
+                                  transition:
+                                    "background-color 0.15s ease, border-color 0.15s ease",
                                 }}
                               />
                               <AutoResizeTextarea
@@ -1020,6 +956,12 @@ export const TaskManager: React.FC = () => {
             <button
               type="button"
               onClick={() => handleCreateEmptyTask(false)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#ececec";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#f7f7f7";
+              }}
               style={{
                 width: "100%",
                 padding: "6px",
@@ -1032,6 +974,7 @@ export const TaskManager: React.FC = () => {
                 fontSize: "13px",
                 fontWeight: "bold",
                 textAlign: "left",
+                transition: "background-color 0.15s ease",
               }}
             >
               ＋ ストックタスクを追加
