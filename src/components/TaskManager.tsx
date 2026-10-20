@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
 import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface Task {
   id: string;
@@ -109,6 +110,7 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
 };
 
 export const TaskManager: React.FC = () => {
+  const isMobile = useIsMobile();
   // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
   const [tasks, setTasks] = useCloudSyncedState<Task[]>("daily_tasks_v2", []);
   const [memo, setMemo] = useCloudSyncedState<string>("brain_dump_memo", "");
@@ -470,7 +472,7 @@ export const TaskManager: React.FC = () => {
               ref={memoRef}
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
-              placeholder="やることをとりあえずここに全て書き殴ってみよう..."
+              placeholder="やることをとりあえずここに全て書き出してみよう..."
               style={{
                 width: "100%",
                 height: "140px",
@@ -551,7 +553,8 @@ export const TaskManager: React.FC = () => {
                 color: "#a0aec0",
               }}
             >
-              ✅ 完了したタスクはチェック済みのまま残ります（日付が変わると自動で消えます）
+              ✅
+              完了したタスクはチェック済みのまま残ります（日付が変わると自動で消えます）
             </p>
 
             <Droppable droppableId="todayList">
@@ -682,6 +685,8 @@ export const TaskManager: React.FC = () => {
                                 onBackspaceEmpty={handleBackspaceEmptyTask}
                                 onArrowKeyPress={handleArrowKeyPress}
                               />
+                              {/* スマホでは画面が狭いため移動ボタンは出さない（ドラッグで移動できる） */}
+                              {!isMobile && (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -702,6 +707,7 @@ export const TaskManager: React.FC = () => {
                               >
                                 ↓ ストックへ移動
                               </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() =>
@@ -894,6 +900,8 @@ export const TaskManager: React.FC = () => {
                                 onBackspaceEmpty={handleBackspaceEmptyTask}
                                 onArrowKeyPress={handleArrowKeyPress}
                               />
+                              {/* スマホでは画面が狭いため移動ボタンは出さない（ドラッグで移動できる） */}
+                              {!isMobile && (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -914,6 +922,7 @@ export const TaskManager: React.FC = () => {
                               >
                                 🔥 今日やるに移動
                               </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() =>

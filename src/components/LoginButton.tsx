@@ -3,32 +3,48 @@ import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { useAuth } from "../hooks/useAuth";
 
+// Googleでログインする。成功したらtrueを返す（PC用・スマホ用のボタンで共通）
+const signInWithGoogle = async (): Promise<boolean> => {
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+    return true;
+  } catch (error) {
+    console.error("ログインに失敗しました", error);
+    const code = (error as { code?: string }).code ?? "unknown";
+    // ポップアップを自分で閉じただけの場合は、エラー扱いしない
+    if (
+      code !== "auth/popup-closed-by-user" &&
+      code !== "auth/cancelled-popup-request"
+    ) {
+      alert(`ログインに失敗しました。（エラーコード: ${code}）`);
+    }
+    return false;
+  }
+};
+
+const signOutUser = () => {
+  signOut(auth).catch((error) => {
+    console.error("ログアウトに失敗しました", error);
+  });
+};
+
+const SYNC_DESCRIPTION =
+  "☁️ Googleアカウントでログインすると、スマホやPCなど複数の端末でデータを共有できます。";
+
+/** PC用：メニュー左下に置くログインボタン */
 export const LoginButton: React.FC = () => {
   const { user, authLoading } = useAuth();
   // アイコン・名前にマウスを乗せたときに出す、ログアウトのポップアップの開閉
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleSignIn = async () => {
-    try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
-      // ログイン後の表示に、ポップアップが開いたまま切り替わらないようにする
-      setIsMenuOpen(false);
-    } catch (error) {
-      console.error("ログインに失敗しました", error);
-      const code = (error as { code?: string }).code ?? "unknown";
-      // ポップアップを自分で閉じただけの場合は、エラー扱いしない
-      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-        return;
-      }
-      alert(`ログインに失敗しました。（エラーコード: ${code}）`);
-    }
+    // ログイン後の表示に、ポップアップが開いたまま切り替わらないようにする
+    if (await signInWithGoogle()) setIsMenuOpen(false);
   };
 
   const handleSignOut = () => {
     setIsMenuOpen(false);
-    signOut(auth).catch((error) => {
-      console.error("ログアウトに失敗しました", error);
-    });
+    signOutUser();
   };
 
   if (authLoading) {
@@ -202,7 +218,7 @@ export const LoginButton: React.FC = () => {
               textAlign: "left",
             }}
           >
-            ☁️ Googleアカウントでログインすると、スマホやPCなど複数の端末でデータを共有できます。
+            {SYNC_DESCRIPTION}
           </div>
         </div>
 
@@ -225,6 +241,139 @@ export const LoginButton: React.FC = () => {
           🔑 ログインする
         </button>
       </div>
+    </div>
+  );
+};
+
+/**
+ * スマホ用：下メニューに並べるログインボタン。
+ * スマホにはホバーがないので、タップで上にポップアップを開く。
+ * 未ログイン時は同期の説明とログインボタン、ログイン中は名前とログアウトを出す。
+ */
+export const NavLoginButton: React.FC<{ itemStyle: React.CSSProperties }> = ({
+  itemStyle,
+}) => {
+  const { user, authLoading } = useAuth();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleSignIn = async () => {
+    if (await signInWithGoogle()) setIsMenuOpen(false);
+  };
+
+  const handleSignOut = () => {
+    setIsMenuOpen(false);
+    signOutUser();
+  };
+
+  const popupButtonStyle: React.CSSProperties = {
+    width: "100%",
+    marginTop: "10px",
+    padding: "10px",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "bold",
+    cursor: "pointer",
+  };
+
+  return (
+    <div style={{ position: "relative", flex: 1, display: "flex" }}>
+      {isMenuOpen && (
+        <>
+          {/* ポップアップの外側をタップしたら閉じる */}
+          <div
+            onClick={() => setIsMenuOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 40 }}
+          />
+          <div
+            className="fade-slide-in"
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 8px)",
+              left: "8px",
+              width: "min(260px, 80vw)",
+              backgroundColor: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.15)",
+              padding: "14px",
+              boxSizing: "border-box",
+              textAlign: "left",
+              zIndex: 50,
+            }}
+          >
+            {user ? (
+              <>
+                <div style={{ fontSize: "12px", color: "#999" }}>ログイン中</div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    color: "#333",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {user.displayName || "ログイン中"}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  style={{
+                    ...popupButtonStyle,
+                    backgroundColor: "#fee2e2",
+                    color: "#ef4444",
+                  }}
+                >
+                  ログアウト
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: "13px", lineHeight: 1.6, color: "#555" }}>
+                  {SYNC_DESCRIPTION}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSignIn}
+                  style={{
+                    ...popupButtonStyle,
+                    backgroundColor: "var(--accent-light)",
+                    color: "#fff",
+                  }}
+                >
+                  🔑 Googleでログイン
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      <button
+        type="button"
+        disabled={authLoading}
+        onClick={() => setIsMenuOpen((prev) => !prev)}
+        style={{
+          ...itemStyle,
+          color: isMenuOpen ? "var(--accent)" : itemStyle.color,
+        }}
+      >
+        {user?.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt=""
+            referrerPolicy="no-referrer"
+            style={{ width: "24px", height: "24px", borderRadius: "50%" }}
+          />
+        ) : (
+          <span style={{ fontSize: "20px", lineHeight: "24px" }}>
+            {user ? "👤" : "🔑"}
+          </span>
+        )}
+        <span>{user ? "アカウント" : "ログイン"}</span>
+      </button>
     </div>
   );
 };
