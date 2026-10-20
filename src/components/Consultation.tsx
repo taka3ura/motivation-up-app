@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { sendChat, type ChatMessage as Message } from "../lib/gemini";
 import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
 
 interface ConsultationHistory {
   id: string;
@@ -93,10 +94,10 @@ export const Consultation: React.FC<ConsultationProps> = ({ goal }) => {
   const [freeInput, setFreeInput] = useState(""); // すでに悩みが決まっている人向けの自由入力欄
   const [isLoading, setIsLoading] = useState(false);
 
-  const [historyList, setHistoryList] = useState<ConsultationHistory[]>(() => {
-    const saved = localStorage.getItem("consultation_history");
-    return saved ? JSON.parse(saved) : [];
-  });
+  // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
+  const [historyList, setHistoryList] = useCloudSyncedState<
+    ConsultationHistory[]
+  >("consultation_history", []);
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
@@ -294,12 +295,7 @@ ${selectedCategory}
               },
             };
 
-            const updatedList = [newHistory, ...historyList];
-            setHistoryList(updatedList);
-            localStorage.setItem(
-              "consultation_history",
-              JSON.stringify(updatedList),
-            );
+            setHistoryList((prev) => [newHistory, ...prev]);
           }
         } catch (err) {
           console.error("相談まとめのパースに失敗しました", err);
@@ -326,20 +322,17 @@ ${selectedCategory}
     field: "trouble" | "solution",
     value: string,
   ) => {
-    setHistoryList((prev) => {
-      const updated = prev.map((h) =>
+    setHistoryList((prev) =>
+      prev.map((h) =>
         h.id === id ? { ...h, summary: { ...h.summary, [field]: value } } : h,
-      );
-      localStorage.setItem("consultation_history", JSON.stringify(updated));
-      return updated;
-    });
+      ),
+    );
   };
 
   // 相談履歴を1件削除する
   const handleDeleteHistory = (id: string) => {
     setHistoryList((prev) => {
       const updated = prev.filter((h) => h.id !== id);
-      localStorage.setItem("consultation_history", JSON.stringify(updated));
       return updated;
     });
   };

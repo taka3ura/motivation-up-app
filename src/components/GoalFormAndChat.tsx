@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
 import {
   sendChat,
   generateText,
@@ -16,7 +17,9 @@ const getTodayDateString = () => {
 
 // AIが返す "YYYY-MM-DD" を表示用の "YYYY/MM/DD" に変える。日付の形でなければそのまま返す
 const formatDeadline = (deadline: string) =>
-  /^\d{4}-\d{1,2}-\d{1,2}$/.test(deadline) ? deadline.replace(/-/g, "/") : deadline;
+  /^\d{4}-\d{1,2}-\d{1,2}$/.test(deadline)
+    ? deadline.replace(/-/g, "/")
+    : deadline;
 
 interface FinalGoal {
   topic: string;
@@ -47,10 +50,11 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
   const [otherTargetJob, setOtherTargetJob] = useState("");
   const [topic, setTopic] = useState("");
 
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const savedMessages = localStorage.getItem("chat_history");
-    return savedMessages ? JSON.parse(savedMessages) : [];
-  });
+  // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
+  const [messages, setMessages] = useCloudSyncedState<Message[]>(
+    "chat_history",
+    [],
+  );
   const [step, setStep] = useState<"form" | "chat">(
     messages.length > 0 ? "chat" : "form",
   );
@@ -101,9 +105,10 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     });
   }, [messages]);
 
+  // ログイン後にクラウドから過去の対話が読み込まれた場合、フォーム画面のままにならないようにする
   useEffect(() => {
-    if (step === "chat" && messages.length > 0) {
-      localStorage.setItem("chat_history", JSON.stringify(messages));
+    if (step === "form" && messages.length > 0) {
+      setStep("chat");
     }
   }, [messages, step]);
 
@@ -164,7 +169,6 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
 
   // 全部やり直す処理
   const handleResetAll = () => {
-    localStorage.removeItem("chat_history");
     setMessages([]);
     setStep("form");
     setUserType("");
@@ -209,14 +213,10 @@ ${historyText}
   };
 
   // フォームの入力欄に、ホバー時だけ枠線を紫にする共通ハンドラー
-  const handleInputHoverEnter = (
-    e: React.MouseEvent<HTMLInputElement>,
-  ) => {
+  const handleInputHoverEnter = (e: React.MouseEvent<HTMLInputElement>) => {
     e.currentTarget.style.borderColor = "var(--accent)";
   };
-  const handleInputHoverLeave = (
-    e: React.MouseEvent<HTMLInputElement>,
-  ) => {
+  const handleInputHoverLeave = (e: React.MouseEvent<HTMLInputElement>) => {
     e.currentTarget.style.borderColor = "#ccc";
   };
 
@@ -828,8 +828,8 @@ ${historyText}
               >
                 🎉 <strong>目標設定が完了しました！</strong>
                 <br />
-                下のボタンから今までの対話をコピーできます。
-                普段使っているAIに貼り付けることで、もっと深掘りすることもできます。
+                右下のボタンから今までの対話をコピーできます。
+                普段使っているAIに貼り付けることで、さらに会話を続けることもできます。
               </div>
             )}
 

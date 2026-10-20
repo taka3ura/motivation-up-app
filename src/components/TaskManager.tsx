@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
+import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
 
 interface Task {
   id: string;
@@ -108,14 +109,9 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
 };
 
 export const TaskManager: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem("daily_tasks_v2");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [memo, setMemo] = useState(
-    () => localStorage.getItem("brain_dump_memo") || "",
-  );
+  // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
+  const [tasks, setTasks] = useCloudSyncedState<Task[]>("daily_tasks_v2", []);
+  const [memo, setMemo] = useCloudSyncedState<string>("brain_dump_memo", "");
   const [isMemoOpen, setIsMemoOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem("is_memo_open");
     return saved ? saved === "true" : true;
@@ -151,10 +147,6 @@ export const TaskManager: React.FC = () => {
 
   const memoContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    localStorage.setItem("daily_tasks_v2", JSON.stringify(tasks));
-  }, [tasks]);
-
   // 日付が変わっていたら、完了済みタスクを一掃する（今日の分だけ見えるようにする）
   useEffect(() => {
     const today = getTodayDateString();
@@ -171,10 +163,7 @@ export const TaskManager: React.FC = () => {
       memoRef.current.style.height = "auto";
       memoRef.current.style.height = `${Math.max(memoRef.current.scrollHeight, 140)}px`;
     }
-    if (!isClearingMemo) {
-      localStorage.setItem("brain_dump_memo", memo);
-    }
-  }, [memo, isMemoOpen, isClearingMemo]);
+  }, [memo, isMemoOpen]);
 
   useEffect(() => {
     localStorage.setItem("is_memo_open", String(isMemoOpen));

@@ -27,6 +27,5 @@ dist-ssr
 # Firebase local cache
 .firebase/
 
-# 未使用のFirebase関連（今は使っていない）
+# 未使用のFirebase関連（Cloud Functionsは今は使っていない）
 functions/
-src/firebaseConfig.ts
