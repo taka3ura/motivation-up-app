@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
-import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
 import {
   sendChat,
   generateText,
   type ChatMessage as Message,
 } from "../lib/gemini";
+
+// 目的深掘りの途中の会話を保存するキー（この端末のlocalStorageだけに保存する）
+const CHAT_HISTORY_STORAGE_KEY = "chat_history";
 
 // 今日の日付を "YYYY-MM-DD" で返す。toISOStringはUTC基準で日本の早朝に前日になるため、端末のローカル時間で組み立てる
 const getTodayDateString = () => {
@@ -50,11 +52,12 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
   const [otherTargetJob, setOtherTargetJob] = useState("");
   const [topic, setTopic] = useState("");
 
-  // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
-  const [messages, setMessages] = useCloudSyncedState<Message[]>(
-    "chat_history",
-    [],
-  );
+  // 途中の会話はプライバシーのため、この端末(localStorage)にだけ保存し、データベースには送らない。
+  // 別の端末では、結果（目標の要約）だけが同期される
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem(CHAT_HISTORY_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
   const [step, setStep] = useState<"form" | "chat">(
     messages.length > 0 ? "chat" : "form",
   );
@@ -105,12 +108,9 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
     });
   }, [messages]);
 
-  // ログイン後にクラウドから過去の対話が読み込まれた場合、フォーム画面のままにならないようにする
   useEffect(() => {
-    if (step === "form" && messages.length > 0) {
-      setStep("chat");
-    }
-  }, [messages, step]);
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
 
   // AIメッセージからの完了検知
   useEffect(() => {
@@ -379,6 +379,58 @@ ${historyText}
     }
     throw new Error("要約に失敗しました");
   };
+
+  // 別の端末で目標設定を済ませた場合：結果は同期されているが、途中の会話はこの端末にはない。
+  // 空のフォームを出すと紛らわしいので、完了済みであることを伝える
+  if (isChatComplete && messages.length === 0) {
+    return (
+      <div
+        className="fade-slide-in"
+        style={{
+          padding: "40px 20px",
+          maxWidth: "500px",
+          margin: "0 auto",
+          width: "100%",
+          boxSizing: "border-box",
+          textAlign: "center",
+        }}
+      >
+        <h2 style={{ fontSize: "20px", margin: "0 0 12px 0", color: "#333" }}>
+          🎉 目標設定は完了しています
+        </h2>
+        <p style={{ fontSize: "14px", color: "#666", lineHeight: 1.7, margin: "0 0 24px 0" }}>
+          決めた目標は、右側に表示されています。
+          <br />
+          深掘りの会話の内容は、プライバシーのため
+          <br />
+          会話をした端末にだけ保存されています。
+        </p>
+        <button
+          type="button"
+          onClick={handleResetAll}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#f1f3f5";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "#fff";
+          }}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#fff",
+            border: "1px solid #ccc",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: "bold",
+            color: "#555",
+            cursor: "pointer",
+            transition: "background-color 0.15s ease",
+          }}
+        >
+          🔄 目標を設定し直す
+        </button>
+      </div>
+    );
+  }
 
   // 画面描画
   return (
