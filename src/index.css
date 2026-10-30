@@ -19,7 +19,9 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  /* このアプリは白い画面を前提に作っているので、端末がダークモードでも常にライトモードで表示する
+     （light darkにすると、ダークモードの端末で入力欄の背景だけ黒くなってしまう） */
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -32,26 +34,11 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-light: #a855f7;
-    --accent-light-hover: #9333ea;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+/* 背景色を指定していない入力欄も、白地に濃い文字で表示する */
+input,
+textarea {
+  background-color: #fff;
+  color: #2c3e50;
 }
 
 #root {
