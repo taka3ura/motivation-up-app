@@ -3,6 +3,10 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { useAuth } from "../hooks/useAuth";
 
+// Firestoreは undefined を保存できない（保存しようとするとエラーになる）。
+// localStorageに保存するときと同じくJSONを経由させて、undefined の項目を取り除く
+const toFirestoreValue = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
 /**
  * localStorageに保存しつつ、ログイン中はFirestore（users/{uid}/app_state/{storageKey}）にも
  * 同期して保存する状態フック。複数端末でログインすれば、同じデータが見える。
@@ -48,7 +52,7 @@ export function useCloudSyncedState<T>(storageKey: string, initialValue: T) {
         if (snap.exists()) {
           setValue(snap.data().value as T);
         } else {
-          await setDoc(ref, { value: valueRef.current });
+          await setDoc(ref, { value: toFirestoreValue(valueRef.current) });
         }
         if (!cancelled) setSyncedUid(user.uid);
       })
@@ -66,9 +70,15 @@ export function useCloudSyncedState<T>(storageKey: string, initialValue: T) {
 
     if (user && syncedUid === user.uid) {
       const ref = doc(db, "users", user.uid, "app_state", storageKey);
-      setDoc(ref, { value }).catch((e) =>
-        console.error(`[cloud sync] ${storageKey} の保存に失敗しました`, e),
-      );
+      // setDocは、保存できない値があると(Promiseを返す前に)その場でエラーを投げる。
+      // それで画面全体が止まらないよう、try/catchでも囲む
+      try {
+        setDoc(ref, { value: toFirestoreValue(value) }).catch((e) =>
+          console.error(`[cloud sync] ${storageKey} の保存に失敗しました`, e),
+        );
+      } catch (e) {
+        console.error(`[cloud sync] ${storageKey} の保存に失敗しました`, e);
+      }
     }
   }, [value, user, syncedUid, storageKey]);
 

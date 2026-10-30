@@ -286,15 +286,14 @@ export const TaskManager: React.FC = () => {
     // （日付が変わったタイミングで、まとめて片付ける）
     setTasks((currentTasks) =>
       currentTasks.map((t) => {
-        if (t.id === id) {
-          const nextState = !t.isCompleted;
-          return {
-            ...t,
-            isCompleted: nextState,
-            completedAt: nextState ? Date.now() : undefined,
-          };
+        if (t.id !== id) return t;
+        if (!t.isCompleted) {
+          return { ...t, isCompleted: true, completedAt: Date.now() };
         }
-        return t;
+        // チェックを外したら、完了日時の項目ごと消す（undefinedを入れるとFirestoreに保存できない）
+        const uncompleted: Task = { ...t, isCompleted: false };
+        delete uncompleted.completedAt;
+        return uncompleted;
       }),
     );
   };
