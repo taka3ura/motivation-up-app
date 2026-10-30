@@ -372,7 +372,7 @@ export const NavLoginButton: React.FC<{ itemStyle: React.CSSProperties }> = ({
             {user ? "👤" : "🔑"}
           </span>
         )}
-        <span>{user ? "アカウント" : "ログイン"}</span>
+        <span>{user ? "ログイン中" : "ログイン"}</span>
       </button>
     </div>
   );

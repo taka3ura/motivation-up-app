@@ -6,6 +6,20 @@ import {
   type ChatMessage as Message,
 } from "../lib/gemini";
 
+// プロフィール入力フォームの項目名（区分、学部・学科 など）。
+// 左に紫の縦線を付けて、項目の区切りを分かりやすくする
+const formLabelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: "8px",
+  paddingLeft: "10px",
+  borderLeft: "4px solid var(--accent)",
+  fontWeight: "bold",
+  fontSize: "15px",
+  lineHeight: 1.4,
+  color: "#333",
+  textAlign: "left",
+};
+
 // 目的深掘りの途中の会話を保存するキー（この端末のlocalStorageだけに保存する）
 const CHAT_HISTORY_STORAGE_KEY = "chat_history";
 
@@ -195,7 +209,7 @@ ${historyText}
 
 ---
 【指示】
-ここまでの対話の続きとして、気さくな先輩メンターのように話してください。
+ここまでの対話の続きとして、話しやすいコーチとして話してください。
 上から目線で教え諭すのではなく、相手の話に相づちを打ちながら、「それってつまり〇〇ってこと？」のように自然に深掘りしてください。
 まだ本人も言葉にできていない、もっと奥にある本音を一緒に探ってみてください。`;
 
@@ -210,14 +224,6 @@ ${historyText}
       .catch((err) => {
         console.error("コピーに失敗しました: ", err);
       });
-  };
-
-  // フォームの入力欄に、ホバー時だけ枠線を紫にする共通ハンドラー
-  const handleInputHoverEnter = (e: React.MouseEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = "var(--accent)";
-  };
-  const handleInputHoverLeave = (e: React.MouseEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = "#ccc";
   };
 
   // プロフィール入力欄でEnterが押されたとき、全項目が埋まっていれば深掘りを開始する
@@ -461,7 +467,7 @@ ${historyText}
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "20px",
+              gap: "32px",
               width: "100%",
               boxSizing: "border-box",
             }}
@@ -472,6 +478,11 @@ ${historyText}
                 margin: "0 0 5px 0",
                 color: "#333",
                 textAlign: "center",
+                // 文字の下にだけ紫の下線を引く（枠いっぱいではなく、文字の長さに合わせる）
+                textDecoration: "underline",
+                textDecorationColor: "var(--accent)",
+                textDecorationThickness: "3px",
+                textUnderlineOffset: "8px",
               }}
             >
               まずはあなたのことを教えてください
@@ -479,16 +490,8 @@ ${historyText}
 
             {/* 1. 区分セレクト */}
             <div style={{ boxSizing: "border-box" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                  color: "#555",
-                }}
-              >
-                区分：
+              <label style={formLabelStyle}>
+                区分
               </label>
               <div style={{ display: "flex", gap: "10px" }}>
                 <button
@@ -568,24 +571,15 @@ ${historyText}
             {userType === "学生" && (
               <div className="fade-slide-in">
                 <div style={{ boxSizing: "border-box" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "bold",
-                      fontSize: "14px",
-                      color: "#555",
-                    }}
-                  >
-                    学部・学科・専攻：
+                  <label style={formLabelStyle}>
+                    学部・学科・専攻
                   </label>
                   <input
                     type="text"
                     value={studentFaculty}
                     onChange={(e) => setStudentFaculty(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
-                    onMouseEnter={handleInputHoverEnter}
-                    onMouseLeave={handleInputHoverLeave}
+                    className="profile-input"
                     placeholder="例：人文学部 心理学科、経営学部"
                     required
                     style={{
@@ -593,32 +587,21 @@ ${historyText}
                       padding: "10px",
                       marginTop: "4px",
                       borderRadius: "6px",
-                      border: "1px solid #ccc",
                       fontSize: "14px",
                       boxSizing: "border-box",
-                      transition: "border-color 0.15s ease",
                     }}
                   />
                 </div>
-                <div style={{ boxSizing: "border-box", marginTop: "20px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "bold",
-                      fontSize: "14px",
-                      color: "#555",
-                    }}
-                  >
-                    大学で学んでいることや、興味のあること：
+                <div style={{ boxSizing: "border-box", marginTop: "32px" }}>
+                  <label style={formLabelStyle}>
+                    大学で学んでいることや、興味のあること
                   </label>
                   <input
                     type="text"
                     value={studentStudy}
                     onChange={(e) => setStudentStudy(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
-                    onMouseEnter={handleInputHoverEnter}
-                    onMouseLeave={handleInputHoverLeave}
+                    className="profile-input"
                     placeholder="例：プログラミング、Webアプリ開発、英語、数学"
                     required
                     style={{
@@ -626,10 +609,8 @@ ${historyText}
                       padding: "10px",
                       marginTop: "4px",
                       borderRadius: "6px",
-                      border: "1px solid #ccc",
                       fontSize: "14px",
                       boxSizing: "border-box",
-                      transition: "border-color 0.15s ease",
                     }}
                   />
                 </div>
@@ -640,24 +621,15 @@ ${historyText}
             {userType === "それ以外" && (
               <div className="fade-slide-in">
                 <div style={{ boxSizing: "border-box" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "bold",
-                      fontSize: "14px",
-                      color: "#555",
-                    }}
-                  >
-                    現在の職種、または現在の状況：
+                  <label style={formLabelStyle}>
+                    現在の職種、または現在の状況
                   </label>
                   <input
                     type="text"
                     value={otherJob}
                     onChange={(e) => setOtherJob(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
-                    onMouseEnter={handleInputHoverEnter}
-                    onMouseLeave={handleInputHoverLeave}
+                    className="profile-input"
                     placeholder="例：営業職、求職中、一般事務"
                     required
                     style={{
@@ -665,32 +637,21 @@ ${historyText}
                       padding: "10px",
                       marginTop: "4px",
                       borderRadius: "6px",
-                      border: "1px solid #ccc",
                       fontSize: "14px",
                       boxSizing: "border-box",
-                      transition: "border-color 0.15s ease",
                     }}
                   />
                 </div>
-                <div style={{ boxSizing: "border-box", marginTop: "20px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "bold",
-                      fontSize: "14px",
-                      color: "#555",
-                    }}
-                  >
-                    今後目指している仕事や、就きたい職種・仕事内容：
+                <div style={{ boxSizing: "border-box", marginTop: "32px" }}>
+                  <label style={formLabelStyle}>
+                    今後目指している仕事や、就きたい職種・仕事内容
                   </label>
                   <input
                     type="text"
                     value={otherTargetJob}
                     onChange={(e) => setOtherTargetJob(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
-                    onMouseEnter={handleInputHoverEnter}
-                    onMouseLeave={handleInputHoverLeave}
+                    className="profile-input"
                     placeholder="例：事務職、SE"
                     required
                     style={{
@@ -698,10 +659,8 @@ ${historyText}
                       padding: "10px",
                       marginTop: "4px",
                       borderRadius: "6px",
-                      border: "1px solid #ccc",
                       fontSize: "14px",
                       boxSizing: "border-box",
-                      transition: "border-color 0.15s ease",
                     }}
                   />
                 </div>
@@ -712,24 +671,15 @@ ${historyText}
             {userType !== "" && (
               <div className="fade-slide-in">
                 <div style={{ boxSizing: "border-box" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "bold",
-                      fontSize: "14px",
-                      color: "#555",
-                    }}
-                  >
-                    今頑張りたいこと（資格・学習テーマなど）：
+                  <label style={formLabelStyle}>
+                    今頑張りたいこと（資格・学習テーマなど）
                   </label>
                   <input
                     type="text"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
-                    onMouseEnter={handleInputHoverEnter}
-                    onMouseLeave={handleInputHoverLeave}
+                    className="profile-input"
                     placeholder="例：ITパスポート、簿記3級、TOEIC、プログラミング学習"
                     required
                     style={{
@@ -737,10 +687,8 @@ ${historyText}
                       padding: "10px",
                       marginTop: "4px",
                       borderRadius: "6px",
-                      border: "1px solid #ccc",
                       fontSize: "14px",
                       boxSizing: "border-box",
-                      transition: "border-color 0.15s ease",
                     }}
                   />
                 </div>
@@ -763,7 +711,7 @@ ${historyText}
                       : "#ccc";
                   }}
                   style={{
-                    marginTop: "20px",
+                    marginTop: "32px",
                     padding: "12px",
                     cursor: !isFormValid() ? "not-allowed" : "pointer",
                     backgroundColor: !isFormValid()

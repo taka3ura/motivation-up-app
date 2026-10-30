@@ -184,7 +184,7 @@ ${selectedCategory}
     let botText = "";
     let success = false;
     // ⭕ 1発目をuserの発言として定義する（Gemini SDKのエラールール対策）
-    const initialPrompt = `相談を開始します。私は今、「${categoryLabel}」という悩みを抱えています。先輩、話を聞いてください。`;
+    const initialPrompt = `相談を開始します。私は今、「${categoryLabel}」という悩みを抱えています。話を聞いてください。`;
 
     try {
       botText = await sendChat({
@@ -505,7 +505,7 @@ ${selectedCategory}
               }}
             >
               <h3 style={{ margin: 0, fontSize: "16px" }}>
-                🤝 先輩AIが相談にのり中
+                🤝 相談中
               </h3>
               <button
                 onClick={handleResetConsultation}
@@ -574,7 +574,7 @@ ${selectedCategory}
               })}
               {isLoading && (
                 <div style={{ color: "#999", fontSize: "12px" }}>
-                  先輩AIが言葉を選んでいます...
+                  返答を考えています...
                 </div>
               )}
             </div>
@@ -589,7 +589,7 @@ ${selectedCategory}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="先輩に気持ちを打ち明けてみて... (Enterで送信 / Shift+Enterで改行)"
+                placeholder="今の気持ちや状況を書いてみてください... (Enterで送信 / Shift+Enterで改行)"
                 disabled={isLoading}
                 rows={1}
                 style={{

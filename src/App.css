@@ -37,6 +37,25 @@
   }
 }
 
+/* ✏️ 目的設定フォームの入力欄。ホバーで紫の枠、入力中は紫の細い枠＋うっすら紫の縁取り
+   （指定しないと、入力中にブラウザ標準の太い黒枠が出てしまう） */
+.profile-input {
+  border: 1px solid #ccc;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.profile-input:hover {
+  border-color: var(--accent);
+}
+
+.profile-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
 .fade-slide-in {
   animation: fadeSlideIn 0.25s ease-out;
 }
