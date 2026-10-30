@@ -97,7 +97,7 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
         border: "none",
         outline: "none",
         backgroundColor: "transparent",
-        color: t.isCompleted ? "#a0aec0" : "#2c3e50",
+        color: t.isCompleted ? "#8a94a6" : "#2c3e50",
         fontFamily: "inherit",
         resize: "none",
         overflow: "hidden",
@@ -381,17 +381,17 @@ export const TaskManager: React.FC = () => {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "20px",
-        padding: "10px",
+        gap: isMobile ? "12px" : "20px",
+        padding: isMobile ? 0 : "10px",
         textAlign: "left",
       }}
     >
       {/* 🧠 メモスペース */}
       <section
         style={{
-          border: "1px solid #ccc",
+          border: isMobile ? "none" : "1px solid #ccc",
           borderRadius: "8px",
-          padding: "15px",
+          padding: isMobile ? 0 : "15px",
           backgroundColor: "#fff",
         }}
       >
@@ -405,7 +405,10 @@ export const TaskManager: React.FC = () => {
         >
           <h2
             style={{
-              fontSize: "16px",
+              fontSize: isMobile ? "18px" : "16px",
+              // 左に紫の縦線（目的設定フォームの項目名と同じ）
+              paddingLeft: "10px",
+              borderLeft: "4px solid var(--accent)",
               margin: 0,
               cursor: "pointer",
               display: "flex",
@@ -415,7 +418,7 @@ export const TaskManager: React.FC = () => {
             }}
             onClick={() => setIsMemoOpen(!isMemoOpen)}
           >
-            <span>🧠 頭の整理・書き出しメモ</span>
+            <span>頭の整理・書き出しメモ</span>
             <span
               style={{
                 fontSize: "12px",
@@ -529,19 +532,30 @@ export const TaskManager: React.FC = () => {
       <DragDropContext onDragEnd={onDragEnd}>
         <div
           style={{
-            border: "1px solid #ccc",
+            border: isMobile ? "none" : "1px solid #ccc",
             borderRadius: "8px",
             backgroundColor: "#fff",
-            padding: "15px",
+            padding: isMobile ? 0 : "15px",
+            // スマホでは、応援の一言との間を少し広げて「今日やるタスク」を見やすくする
+            marginTop: isMobile ? "12px" : 0,
             display: "flex",
             flexDirection: "column",
-            gap: "25px",
+            gap: isMobile ? "16px" : "25px",
           }}
         >
           {/* 🔥 今日やるタスク */}
           <section>
             <div style={{ margin: "0 0 4px 0" }}>
-              <h3 style={{ fontSize: "15px", margin: 0, color: "#e67e22" }}>
+              <h3
+                style={{
+                  fontSize: isMobile ? "18px" : "16px",
+                  // 左に紫の縦線（目的設定フォームの項目名と同じ）
+                  paddingLeft: "10px",
+                  borderLeft: "4px solid var(--accent)",
+                  margin: 0,
+                  color: "#e67e22",
+                }}
+              >
                 🔥 今日やるタスク
               </h3>
             </div>
@@ -549,11 +563,10 @@ export const TaskManager: React.FC = () => {
               style={{
                 margin: "0 0 10px 0",
                 fontSize: "11px",
-                color: "#a0aec0",
+                color: "#718096",
               }}
             >
-              ✅
-              完了したタスクはチェック済みのまま残ります（日付が変わると自動で消えます）
+              完了したタスクは、日付が変わると消えます
             </p>
 
             <Droppable droppableId="todayList">
@@ -596,7 +609,7 @@ export const TaskManager: React.FC = () => {
                               onMouseLeave={(e) => {
                                 if (!snapshot.isDragging) {
                                   e.currentTarget.style.backgroundColor =
-                                    "#fff9f2";
+                                    "#fff3e6";
                                 }
                               }}
                               style={{
@@ -613,7 +626,7 @@ export const TaskManager: React.FC = () => {
                                 borderRadius: "6px",
                                 backgroundColor: snapshot.isDragging
                                   ? "#ffeacc"
-                                  : "#fff9f2",
+                                  : "#fff3e6",
                                 maxHeight:
                                   isAnimating || isAdding ? "0px" : "150px",
                                 opacity: isAnimating || isAdding ? 0 : 1,
@@ -742,7 +755,7 @@ export const TaskManager: React.FC = () => {
                 e.currentTarget.style.backgroundColor = "#ffe9d2";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "#fffaf0";
+                e.currentTarget.style.backgroundColor = "#fff3e6";
               }}
               style={{
                 width: "100%",
@@ -750,7 +763,7 @@ export const TaskManager: React.FC = () => {
                 marginTop: "8px",
                 border: "none",
                 borderRadius: "6px",
-                backgroundColor: "#fffaf0",
+                backgroundColor: "#fff3e6",
                 color: "#e67e22",
                 cursor: "pointer",
                 fontSize: "13px",
@@ -766,7 +779,14 @@ export const TaskManager: React.FC = () => {
           {/* 📋 全体のタスクストック */}
           <section style={{ borderTop: "1px dashed #eee", paddingTop: "20px" }}>
             <h3
-              style={{ fontSize: "15px", margin: "0 0 10px 0", color: "#555" }}
+              style={{
+                fontSize: isMobile ? "18px" : "16px",
+                // 左に紫の縦線（目的設定フォームの項目名と同じ）
+                paddingLeft: "10px",
+                borderLeft: "4px solid var(--accent)",
+                margin: "0 0 10px 0",
+                color: "#555",
+              }}
             >
               📋 全体のタスク（ストック欄）
             </h3>
@@ -805,13 +825,13 @@ export const TaskManager: React.FC = () => {
                               onMouseEnter={(e) => {
                                 if (!snapshot.isDragging) {
                                   e.currentTarget.style.backgroundColor =
-                                    "#ececec";
+                                    "#e8eaed";
                                 }
                               }}
                               onMouseLeave={(e) => {
                                 if (!snapshot.isDragging) {
                                   e.currentTarget.style.backgroundColor =
-                                    "#fafafa";
+                                    "#f5f6f8";
                                 }
                               }}
                               style={{
@@ -827,8 +847,8 @@ export const TaskManager: React.FC = () => {
                                     : "1px solid #eee",
                                 borderRadius: "6px",
                                 backgroundColor: snapshot.isDragging
-                                  ? "#e6e6e6"
-                                  : "#fafafa",
+                                  ? "#e3e6ea"
+                                  : "#f5f6f8",
                                 maxHeight:
                                   isAnimating || isAdding ? "0px" : "150px",
                                 opacity: isAnimating || isAdding ? 0 : 1,
@@ -954,7 +974,7 @@ export const TaskManager: React.FC = () => {
               type="button"
               onClick={() => handleCreateEmptyTask(false)}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#ececec";
+                e.currentTarget.style.backgroundColor = "#e8eaed";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "#f7f7f7";
