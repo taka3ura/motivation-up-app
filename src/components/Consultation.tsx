@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { sendChat, type ChatMessage as Message } from "../lib/gemini";
 import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
 import { useCloudSyncedState } from "../hooks/useCloudSyncedState";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface ConsultationHistory {
   id: string;
@@ -14,6 +15,13 @@ interface ConsultationHistory {
   };
 }
 
+// 見出しの左に付ける紫の縦線（タスク画面・目的設定フォームの項目名と同じ）
+const sectionHeadingStyle: React.CSSProperties = {
+  paddingLeft: "10px",
+  borderLeft: "4px solid var(--accent)",
+  textAlign: "left",
+};
+
 // 目的設定機能（GoalFormAndChat）で確定した目標。未設定ならnull
 interface Goal {
   topic: string;
@@ -21,6 +29,10 @@ interface Goal {
   idealFuture: string;
   deadline: string;
 }
+
+
+// 相談の記録1件ごとのID（作成した時刻から作る）
+const createHistoryId = () => Date.now().toString();
 
 interface ConsultationProps {
   goal: Goal | null;
@@ -87,6 +99,9 @@ const EditableHistoryField = ({
 };
 
 export const Consultation: React.FC<ConsultationProps> = ({ goal }) => {
+  const isMobile = useIsMobile();
+  // スマホのキーボードには「Enter」と「Shift+Enter」の使い分けがないので、操作説明はPCだけに出す
+  const enterHint = isMobile ? "" : " (Enterで送信 / Shift+Enterで改行)";
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [step, setStep] = useState<"select" | "chat">("select");
@@ -100,6 +115,11 @@ export const Consultation: React.FC<ConsultationProps> = ({ goal }) => {
   >("consultation_history", []);
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
+  const historySectionRef = useRef<HTMLElement>(null);
+
+  // まとめが記録に保存されたらtrue。分かりやすい終了ボタンを出す
+  // （自動で終了すると、まとめを読んでいる途中で画面が切り替わってしまうため、終了は自分で選ぶ）
+  const [isSummarySaved, setIsSummarySaved] = useState(false);
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useAutoResizeTextarea(input, 120, step);
@@ -216,10 +236,11 @@ ${selectedCategory}
     setIsLoading(false);
   };
 
-  // Enterで送信、Shift+Enterで改行
+  // Enterで送信、Shift+Enterで改行（スマホはShift+Enterがないので、Enterはそのまま改行にする）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 日本語変換中のEnterキーは無視するガード
     if (e.nativeEvent.isComposing) return;
+    if (isMobile) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       formRef.current?.requestSubmit();
@@ -238,6 +259,7 @@ ${selectedCategory}
     e: React.KeyboardEvent<HTMLTextAreaElement>,
   ) => {
     if (e.nativeEvent.isComposing) return;
+    if (isMobile) return; // スマホでは、Enterはそのまま改行にする（送信はボタンで行う）
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       freeFormRef.current?.requestSubmit();
@@ -285,7 +307,7 @@ ${selectedCategory}
 
           if (troubleMatch && solutionMatch) {
             const newHistory: ConsultationHistory = {
-              id: Date.now().toString(),
+              id: createHistoryId(),
               date: new Date().toLocaleDateString("ja-JP"),
               topic: goal?.topic || "目標",
               category: selectedCategory,
@@ -296,6 +318,7 @@ ${selectedCategory}
             };
 
             setHistoryList((prev) => [newHistory, ...prev]);
+            setIsSummarySaved(true);
           }
         } catch (err) {
           console.error("相談まとめのパースに失敗しました", err);
@@ -311,9 +334,22 @@ ${selectedCategory}
   };
 
   const handleResetConsultation = () => {
+    setIsSummarySaved(false);
     setMessages([]);
     setSelectedCategory("");
     setStep("select");
+  };
+
+  // まとめが出たあとに相談を終了する。追加されたまとめのカードが見えるよう
+  // 「これまでの記録」までスクロールする
+  const handleFinishConsultation = () => {
+    handleResetConsultation();
+    requestAnimationFrame(() => {
+      historySectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   };
 
   // 相談履歴の「当時の悩み」「決めた改善策」を編集して保存する
@@ -337,19 +373,38 @@ ${selectedCategory}
     });
   };
 
+  // スマホで相談している間は、目標設定のチャットと同じく
+  // 「チャット欄が画面の残りいっぱいに広がり、入力欄が画面の一番下に来る」作りにする。
+  // こうすると、キーボードが出てもチャット欄と入力欄がキーボードの上に収まり、画面がずれない
+  const isMobileChat = isMobile && step === "chat";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: isMobile ? "24px" : "30px",
+        height: isMobileChat ? "100%" : undefined,
+      }}
+    >
       <section
         style={{
-          border: "1px solid #ccc",
+          // スマホでは画面を広く使うため、外枠と余白をなくす（タスク画面と同じ）
+          border: isMobile ? "none" : "1px solid #ccc",
           borderRadius: "8px",
-          padding: "20px",
+          padding: isMobile ? 0 : "20px",
           backgroundColor: "#fff",
+          ...(isMobileChat && {
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+          }),
         }}
       >
         {step === "select" ? (
           <div>
-            <h2 style={{ fontSize: "18px", marginBottom: "15px" }}>
+            <h2 style={{ ...sectionHeadingStyle, fontSize: "18px", marginBottom: "15px" }}>
               💬 モチベ低下時の相談
             </h2>
 
@@ -364,7 +419,7 @@ ${selectedCategory}
                 value={freeInput}
                 onChange={(e) => setFreeInput(e.target.value)}
                 onKeyDown={handleFreeInputKeyDown}
-                placeholder="すでに相談したいことが決まっていたら、ここに書いてね (Enterで送信 / Shift+Enterで改行)"
+                placeholder={`すでに相談したいことが決まっていたら、ここに書いてね${enterHint}`}
                 rows={1}
                 style={{
                   width: "100%",
@@ -495,7 +550,13 @@ ${selectedCategory}
             </div>
           </div>
         ) : (
-          <div>
+          <div
+            style={
+              isMobileChat
+                ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
+                : undefined
+            }
+          >
             <div
               style={{
                 display: "flex",
@@ -504,7 +565,7 @@ ${selectedCategory}
                 marginBottom: "15px",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "16px" }}>
+              <h3 style={{ ...sectionHeadingStyle, margin: 0, fontSize: "16px" }}>
                 🤝 相談中
               </h3>
               <button
@@ -533,12 +594,13 @@ ${selectedCategory}
             <div
               ref={chatBoxRef}
               style={{
-                height: "300px",
+                // スマホで相談中は、画面の残りいっぱいに広げる
+                ...(isMobileChat ? { flex: 1, minHeight: 0 } : { height: "300px" }),
                 overflowY: "auto",
                 border: "1px solid #eee",
                 borderRadius: "6px",
                 padding: "10px",
-                marginBottom: "15px",
+                marginBottom: isMobileChat ? "8px" : "15px",
                 backgroundColor: "#fafafa",
               }}
             >
@@ -579,6 +641,63 @@ ${selectedCategory}
               )}
             </div>
 
+            {/* まとめが保存されたら、チャット欄の外（入力欄のすぐ上）に終了ボタンを出す。
+                チャット欄の中に置くと、まとめが長いときにスクロールしないと見えないため */}
+            {isSummarySaved && (
+              <div
+                className="fade-slide-in"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  marginBottom: "8px",
+                  padding: "8px 12px",
+                  borderRadius: "10px",
+                  backgroundColor: "var(--accent-bg)",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    color: "var(--accent)",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  📝 まとめを記録に保存しました
+                </span>
+                <button
+                  type="button"
+                  onClick={handleFinishConsultation}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "scale(1.05)";
+                    e.currentTarget.style.backgroundColor =
+                      "var(--accent-light-hover)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.backgroundColor = "var(--accent-light)";
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    border: "none",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--accent-light)",
+                    color: "#fff",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "background-color 0.2s, transform 0.15s ease",
+                  }}
+                >
+                  相談を終了する
+                </button>
+              </div>
+            )}
+
             <form
               ref={formRef}
               onSubmit={handleSendMessage}
@@ -589,7 +708,7 @@ ${selectedCategory}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="今の気持ちや状況を書いてみてください... (Enterで送信 / Shift+Enterで改行)"
+                placeholder={`今の気持ちや状況を書いてみてください...${enterHint}`}
                 disabled={isLoading}
                 rows={1}
                 style={{
@@ -660,9 +779,13 @@ ${selectedCategory}
         )}
       </section>
 
-      {/* ＝ 下半分：過去の相談履歴エリア ＝ */}
-      <section style={{ borderTop: "2px dashed #eee", paddingTop: "20px" }}>
-        <h3 style={{ fontSize: "16px", margin: "0 0 15px 0" }}>
+      {/* ＝ 下半分：過去の相談履歴エリア（スマホで相談している間は、チャットを広く見せるため隠す） ＝ */}
+      {!isMobileChat && (
+      <section
+        ref={historySectionRef}
+        style={{ borderTop: "2px dashed #eee", paddingTop: "20px" }}
+      >
+        <h3 style={{ ...sectionHeadingStyle, fontSize: "16px", margin: "0 0 15px 0" }}>
           📜 これまでにあなたが乗り越えてきた記録 ({historyList.length}件)
         </h3>
         {historyList.length === 0 ? (
@@ -788,6 +911,7 @@ ${selectedCategory}
           </div>
         )}
       </section>
+      )}
     </div>
   );
 };

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useIsEditingText } from "../hooks/useIsEditingText";
 import {
   sendChat,
   generateText,
@@ -57,6 +59,11 @@ export const GoalFormAndChat: React.FC<GoalFormAndChatProps> = ({
   isChatComplete,
   onChatCompleteStatus,
 }) => {
+  const isMobile = useIsMobile();
+  // スマホで文字を入力している（キーボードが出ている）間は、やり直し・コピーのボタンを隠す
+  const isEditingText = useIsEditingText();
+  const hideChatButtons = isMobile && isEditingText;
+
   // --- State管理 ---
   const [userType, setUserType] = useState<"学生" | "それ以外" | "">("");
 
@@ -342,6 +349,8 @@ ${historyText}
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 日本語変換中のEnterキーは無視するガード
     if (e.nativeEvent.isComposing) return;
+    // スマホのキーボードにはShift+Enterがないので、Enterはそのまま改行にする（送信はボタンで行う）
+    if (isMobile) return;
 
     if (e.key === "Enter") {
       if (!e.shiftKey) {
@@ -605,7 +614,7 @@ ${historyText}
                     onChange={(e) => setStudentStudy(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
                     className="profile-input"
-                    placeholder="例：プログラミング、Webアプリ開発、英語、数学"
+                    placeholder="例：プログラミング、Webアプリ開発、英語"
                     required
                     style={{
                       width: "100%",
@@ -683,7 +692,7 @@ ${historyText}
                     onChange={(e) => setTopic(e.target.value)}
                     onKeyDown={handleProfileFieldKeyDown}
                     className="profile-input"
-                    placeholder="例：ITパスポート、簿記3級、TOEIC、プログラミング学習"
+                    placeholder="例：ITパスポート、簿記3級、TOEIC"
                     required
                     style={{
                       width: "100%",
@@ -750,14 +759,17 @@ ${historyText}
         >
           <div
             style={{
-              padding: "20px",
+              // スマホでは、チャット部分を広く見せるため見出しをコンパクトにする
+              padding: isMobile ? "12px" : "20px",
               textAlign: "center",
               borderBottom: "1px solid #eee",
               backgroundColor: "#fff",
               flexShrink: 0,
             }}
           >
-            <h3 style={{ margin: 0 }}>🎯 目標達成の目的を明確にする対話</h3>
+            <h3 style={{ margin: 0, fontSize: isMobile ? "17px" : undefined }}>
+              🎯 目標達成の目的を明確にする対話
+            </h3>
           </div>
 
           <div
@@ -808,7 +820,8 @@ ${historyText}
 
           <div
             style={{
-              padding: "20px",
+              // スマホで入力中はボタンを隠すので、その分の余白も詰める
+              padding: isMobile ? "8px 12px" : "20px",
               borderTop: "1px solid #eee",
               backgroundColor: "#fff",
               display: "flex",
@@ -819,14 +832,14 @@ ${historyText}
             {isChatComplete && (
               <div
                 style={{
-                  marginBottom: "15px",
-                  padding: "12px 15px",
+                  marginBottom: isMobile ? "8px" : "15px",
+                  padding: isMobile ? "8px 10px" : "12px 15px",
                   backgroundColor: "#e8f4fd",
                   border: "1px solid #bce0fd",
                   borderRadius: "6px",
                   color: "#1d6fa5",
-                  fontSize: "14px",
-                  lineHeight: "1.6",
+                  fontSize: isMobile ? "12px" : "14px",
+                  lineHeight: isMobile ? "1.5" : "1.6",
                 }}
               >
                 🎉 <strong>目標設定が完了しました！</strong>
@@ -836,7 +849,9 @@ ${historyText}
               </div>
             )}
 
-            {/* 📝 改良した入力フォーム部分（textareaに変更） */}
+            {/* 📝 改良した入力フォーム部分（textareaに変更）。
+                目標設定が完了したら入力できないので、スマホでは出さずにチャットを広く見せる */}
+            {!(isMobile && isChatComplete) && (
             <form
               ref={formRef}
               onSubmit={handleFormSubmit}
@@ -844,7 +859,7 @@ ${historyText}
                 display: "flex",
                 gap: "10px",
                 alignItems: "flex-end", // 入力欄が広がってもボタンは下揃えをキープ
-                marginBottom: "15px",
+                marginBottom: hideChatButtons ? 0 : isMobile ? "8px" : "15px",
               }}
             >
               <textarea
@@ -854,7 +869,9 @@ ${historyText}
                 placeholder={
                   isChatComplete
                     ? "対話は終了しました"
-                    : "メッセージを入力... (Enterで送信 / Shift+Enterで改行)"
+                    : isMobile
+                      ? "メッセージを入力..."
+                      : "メッセージを入力... (Enterで送信 / Shift+Enterで改行)"
                 }
                 disabled={isLoading || isChatComplete}
                 ref={textareaRef}
@@ -924,7 +941,9 @@ ${historyText}
                 送信
               </button>
             </form>
-            {/* 🛠️ ボタン配置エリア */}
+            )}
+            {/* 🛠️ ボタン配置エリア（スマホで入力中は、キーボードの上に出てこないよう隠す） */}
+            {!hideChatButtons && (
             <div style={{ display: "flex", gap: "10px", width: "100%" }}>
               <button
                 type="button"
@@ -933,11 +952,11 @@ ${historyText}
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 style={{
                   flex: 1,
-                  padding: "10px 14px",
+                  padding: isMobile ? "10px 12px" : "10px 14px",
                   backgroundColor: "#fff",
                   border: "1px solid #ccc",
                   borderRadius: "4px",
-                  fontSize: "14px",
+                  fontSize: isMobile ? "13px" : "14px",
                   fontWeight: "bold",
                   color: "#555",
                   cursor: "pointer",
@@ -956,11 +975,11 @@ ${historyText}
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                 style={{
                   flex: 1,
-                  padding: "10px 14px",
+                  padding: isMobile ? "10px 12px" : "10px 14px",
                   backgroundColor: isChatComplete ? "#2ecc71" : "#e0e0e0",
                   border: isChatComplete ? "none" : "1px solid #ccc",
                   borderRadius: "4px",
-                  fontSize: "14px",
+                  fontSize: isMobile ? "13px" : "14px",
                   fontWeight: "bold",
                   color: isChatComplete ? "#fff" : "#999",
                   cursor: isChatComplete ? "pointer" : "not-allowed",
@@ -971,6 +990,7 @@ ${historyText}
                 📋 これまでの対話をコピー
               </button>
             </div>
+            )}
           </div>
         </div>
       )}
