@@ -41,6 +41,29 @@ textarea {
   color: #2c3e50;
 }
 
+/* iPhoneのSafariは、16pxより小さい文字の入力欄をタップすると自動でズームしてしまう。
+   スマホ表示のときは、入力欄の文字を16pxにしてズームを防ぐ
+   （各入力欄の文字サイズは画面ごとに直接指定しているため、!importantで上書きする） */
+@media (max-width: 768px) {
+  input,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* スマホでは、ページ全体はスクロールさせず、各画面の中だけでスクロールさせる。
+     キーボードが出てアプリの高さが縮んだときに、その下の真っ白な部分が見えないようにする */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    min-height: 0;
+  }
+}
+
 #root {
   width: 1126px;
   max-width: 100%;

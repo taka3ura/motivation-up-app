@@ -454,9 +454,12 @@ ${historyText}
         /* 📝 最初のアンケートフォーム画面 */
         <div
           style={{
-            padding: "30px 20px",
-            maxWidth: "500px",
-            margin: "0 auto",
+            // フォームが画面に収まらないとき（スマホでキーボードが出ている間など）は、
+            // この画面の中でスクロールさせる
+            height: "100%",
+            overflowY: "auto",
+            // 中身の幅は最大460pxにして中央に寄せる（スクロールバーは画面の端に出す）
+            padding: "30px max(20px, calc((100% - 460px) / 2))",
             width: "100%",
             boxSizing: "border-box",
           }}

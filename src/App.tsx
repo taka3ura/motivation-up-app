@@ -15,6 +15,8 @@ import { GoalSummaryPanel } from "./components/GoalSummaryPanel.tsx";
 import { BottomNav } from "./components/BottomNav.tsx";
 import { useCloudSyncedState } from "./hooks/useCloudSyncedState.ts";
 import { useIsMobile } from "./hooks/useIsMobile.ts";
+import { useIsEditingText } from "./hooks/useIsEditingText.ts";
+import { useVisibleViewportHeight } from "./hooks/useVisibleViewportHeight.ts";
 import { getRemainingDays, type FinalGoal } from "./lib/goal.ts";
 import { BOTTOM_NAV_HEIGHT } from "./lib/layout.ts";
 
@@ -36,6 +38,8 @@ function App() {
   const { pathname } = useLocation();
   // 画面幅768px以下ならスマホ表示（下メニュー＋1画面ずつ）に切り替える
   const isMobile = useIsMobile();
+  const isEditingText = useIsEditingText();
+  const visibleHeight = useVisibleViewportHeight(isMobile);
 
   // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
   const [currentGoal, setCurrentGoal] = useCloudSyncedState<FinalGoal | null>(
@@ -173,8 +177,11 @@ function App() {
         isMobile
           ? {
               // スマホ：メイン画面を全幅で表示し、下メニューの分だけ下を空ける
-              height: "100dvh",
-              paddingBottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
+              // キーボードが出ている間も、実際に見えている範囲に収まる高さにする
+              height: `${visibleHeight}px`,
+              paddingBottom: isEditingText
+                ? 0
+                : `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
               boxSizing: "border-box",
               display: "flex",
               flexDirection: "column",
@@ -203,7 +210,8 @@ function App() {
           >
             {routes}
           </main>
-          <BottomNav />
+          {/* 文字を入力中（キーボードが出ている間）は、メニューがキーボードの上に押し上げられないよう隠す */}
+          {!isEditingText && <BottomNav />}
         </>
       ) : (
         <>
