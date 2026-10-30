@@ -82,13 +82,19 @@ const inputStyle: React.CSSProperties = {
   color: "#444",
   width: "100%",
   padding: "6px 8px",
-  margin: "4px 0 0 0",
+  margin: "2px 0 0 0", // 項目名のすぐ下に内容を置き、1つのまとまりに見せる
   outline: "none",
   resize: "none",
   display: "block",
   borderRadius: "4px",
   transition: "background-color 0.15s ease",
   boxSizing: "border-box",
+};
+
+// 2つ目以降の項目の上に引く区切り線（枠の黄色より少し濃い色で、控えめに）
+const dividedItemStyle: React.CSSProperties = {
+  borderTop: "1px solid #f0d98c",
+  paddingTop: "12px",
 };
 
 const labelStyle: React.CSSProperties = {
@@ -124,12 +130,12 @@ export const GoalSummaryPanel: React.FC<{
             color: "#555",
             display: "flex",
             flexDirection: "column",
-            gap: "4px",
+            gap: "12px", // 項目どうしの間は広めに空けて、まとまりごとに区切る
           }}
         >
           <p
             style={{
-              margin: "0 0 4px 0",
+              margin: 0,
               fontSize: "12px",
               lineHeight: "1.3",
               color: "#9a7b1f",
@@ -154,7 +160,7 @@ export const GoalSummaryPanel: React.FC<{
           </div>
 
           {/* 2. 現状の課題 */}
-          <div>
+          <div style={dividedItemStyle}>
             <p style={labelStyle}>⚠️ 現状の課題:</p>
             <AutoResizeTextarea
               value={goal.challenge}
@@ -164,7 +170,7 @@ export const GoalSummaryPanel: React.FC<{
           </div>
 
           {/* 3. 理想の未来 */}
-          <div>
+          <div style={dividedItemStyle}>
             <p style={labelStyle}>🌈 理想の未来:</p>
             <AutoResizeTextarea
               value={goal.idealFuture}
@@ -174,7 +180,7 @@ export const GoalSummaryPanel: React.FC<{
           </div>
 
           {/* 4. 期限 */}
-          <div>
+          <div style={dividedItemStyle}>
             <p style={labelStyle}>📅 期限:</p>
             <AutoResizeTextarea
               value={goal.deadline}
@@ -183,7 +189,7 @@ export const GoalSummaryPanel: React.FC<{
             />
             <div
               style={{
-                marginTop: "8px",
+                marginTop: "6px",
                 padding: "6px 12px",
                 backgroundColor: isChatComplete ? "#e67e22" : "#ccc",
                 color: "#fff",

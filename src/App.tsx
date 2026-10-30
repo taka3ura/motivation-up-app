@@ -39,7 +39,7 @@ function App() {
   // 画面幅768px以下ならスマホ表示（下メニュー＋1画面ずつ）に切り替える
   const isMobile = useIsMobile();
   const isEditingText = useIsEditingText();
-  const visibleHeight = useVisibleViewportHeight(isMobile);
+  const visibleViewport = useVisibleViewportHeight(isMobile);
 
   // ログイン中はFirestoreにも自動で同期される（複数端末で共有される）
   const [currentGoal, setCurrentGoal] = useCloudSyncedState<FinalGoal | null>(
@@ -100,7 +100,15 @@ function App() {
       <Route
         path="/task"
         element={
-          <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
+          <div
+            style={{
+              // スマホでは画面を広く使うため、余白を最小限にする（上だけ少し空ける）
+              padding: isMobile ? "20px 8px 8px" : "20px",
+              overflowY: "auto",
+              height: "100%",
+              boxSizing: "border-box",
+            }}
+          >
             <TaskManager />
           </div>
         }
@@ -108,7 +116,15 @@ function App() {
       <Route
         path="/consult"
         element={
-          <div style={{ padding: "20px", overflowY: "auto", height: "100%" }}>
+          <div
+            style={{
+              // スマホでは余白を最小限にする（上だけ少し空ける。タスク画面と同じ）
+              padding: isMobile ? "20px 8px 8px" : "20px",
+              overflowY: "auto",
+              height: "100%",
+              boxSizing: "border-box",
+            }}
+          >
             <Consultation goal={currentGoal} />
           </div>
         }
@@ -131,6 +147,9 @@ function App() {
                   fontSize: "18px",
                   margin: "0 0 15px 0",
                   textAlign: "left",
+                  // 左に紫の縦線（タスク画面・相談画面の見出しと同じ）
+                  paddingLeft: "10px",
+                  borderLeft: "4px solid var(--accent)",
                 }}
               >
                 📋 目標確認
@@ -176,9 +195,14 @@ function App() {
       style={
         isMobile
           ? {
-              // スマホ：メイン画面を全幅で表示し、下メニューの分だけ下を空ける
-              // キーボードが出ている間も、実際に見えている範囲に収まる高さにする
-              height: `${visibleHeight}px`,
+              // スマホ：メイン画面を全幅で表示し、下メニューの分だけ下を空ける。
+              // キーボードが出ると、iPhoneは「見えている範囲」を縮めて下にずらすので、
+              // アプリも同じ位置・高さに置いて、画面の下端がキーボードのすぐ上に来るようにする
+              position: "fixed",
+              top: `${visibleViewport.offsetTop}px`,
+              left: 0,
+              right: 0,
+              height: `${visibleViewport.height}px`,
               paddingBottom: isEditingText
                 ? 0
                 : `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`,
@@ -315,58 +339,131 @@ function App() {
             onClick={(e) => e.stopPropagation()} // カードの中をクリックしても閉じない
             style={{
               backgroundColor: "#fff",
-              borderRadius: "12px",
-              padding: "28px 32px",
-              width: "min(360px, 90vw)",
-              boxSizing: "border-box",
-              textAlign: "center",
-              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.2)",
+              borderRadius: "16px",
+              width: "min(380px, 90vw)",
+              maxHeight: "85%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 16px 40px rgba(0, 0, 0, 0.25)",
               // 消えるときは、少し下に沈みながら薄くなる
               transform: isPopupClosing ? "translateY(8px)" : "translateY(0)",
               transition: `transform ${DEADLINE_POPUP_FADE_MS}ms ease`,
             }}
           >
-            <p style={{ margin: "0 0 4px 0", fontSize: "13px", color: "#888" }}>
-              🎯 {currentGoal.topic}
-            </p>
-            {deadlineDays > 0 ? (
-              <>
-                <p style={{ margin: "8px 0 0 0", fontSize: "15px", color: "#555" }}>
-                  目標の期限まで
-                </p>
+            {/* 上の帯：目標と、期限までの残り日数を大きく */}
+            <div
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--accent-light), var(--accent))",
+                color: "#fff",
+                padding: "22px 20px 20px",
+                textAlign: "center",
+                flexShrink: 0,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "14px", fontWeight: "bold" }}>
+                🎯 {currentGoal.topic}
+              </p>
+              {deadlineDays > 0 ? (
+                <>
+                  <p style={{ margin: "10px 0 0 0", fontSize: "13px", opacity: 0.9 }}>
+                    目標の期限まで
+                  </p>
+                  <p
+                    style={{
+                      margin: "2px 0",
+                      fontSize: "46px",
+                      fontWeight: "bold",
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    あと {deadlineDays} 日
+                  </p>
+                </>
+              ) : deadlineDays === 0 ? (
                 <p
                   style={{
-                    margin: "4px 0",
-                    fontSize: "44px",
+                    margin: "12px 0 4px 0",
+                    fontSize: "24px",
                     fontWeight: "bold",
-                    color: "var(--accent)",
-                    lineHeight: 1.2,
                   }}
                 >
-                  あと {deadlineDays} 日
+                  🎉 今日が目標の期限です！
                 </p>
-                <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#888" }}>
-                  （期限：{currentGoal.deadline}）
+              ) : (
+                <p
+                  style={{
+                    margin: "12px 0 4px 0",
+                    fontSize: "20px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  期限から {Math.abs(deadlineDays)} 日が過ぎました
                 </p>
-              </>
-            ) : deadlineDays === 0 ? (
-              <p
-                style={{
-                  margin: "12px 0 20px 0",
-                  fontSize: "22px",
-                  fontWeight: "bold",
-                  color: "var(--accent)",
-                }}
-              >
-                🎉 今日が目標の期限です！
+              )}
+              <p style={{ margin: 0, fontSize: "12px", opacity: 0.85 }}>
+                期限：{currentGoal.deadline}
               </p>
-            ) : (
-              <p style={{ margin: "12px 0 20px 0", fontSize: "15px", color: "#555", lineHeight: 1.6 }}>
-                目標の期限から {Math.abs(deadlineDays)} 日が過ぎました。
-                <br />
-                {isMobile ? "「目標確認」画面" : "右側"}の期限は、クリックすると変更できます。
-              </p>
-            )}
+            </div>
+
+            {/* 中身：目標設定で言葉にした「理想の未来」と「現状の課題」を思い出してもらう */}
+            <div
+              style={{
+                padding: "18px 20px 4px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                textAlign: "left",
+              }}
+            >
+              {[
+                { label: "🌈 理想の未来", text: currentGoal.idealFuture },
+                { label: "⚠️ 現状の課題", text: currentGoal.challenge },
+              ]
+                .filter((item) => item.text)
+                .map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      backgroundColor: "#faf7ff",
+                      border: "1px solid var(--accent-bg)",
+                      borderRadius: "10px",
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 2px 0",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        color: "var(--accent)",
+                      }}
+                    >
+                      {item.label}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "14px",
+                        lineHeight: 1.6,
+                        color: "#444",
+                      }}
+                    >
+                      {item.text}
+                    </p>
+                  </div>
+                ))}
+              {deadlineDays < 0 && (
+                <p style={{ margin: 0, fontSize: "12px", color: "#888", lineHeight: 1.6 }}>
+                  {isMobile ? "「目標確認」画面" : "右側"}
+                  の期限は、クリックすると変更できます。
+                </p>
+              )}
+            </div>
+
+            <div style={{ padding: "14px 20px 20px", flexShrink: 0 }}>
             <button
               type="button"
               onClick={closeDeadlinePopup}
@@ -382,7 +479,7 @@ function App() {
                 width: "100%",
                 padding: "12px",
                 border: "none",
-                borderRadius: "8px",
+                borderRadius: "10px",
                 backgroundColor: "var(--accent-light)",
                 color: "#fff",
                 fontSize: "15px",
@@ -393,6 +490,7 @@ function App() {
             >
               今日もがんばる！
             </button>
+            </div>
           </div>
         </div>
       )}
