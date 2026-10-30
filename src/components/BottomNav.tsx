@@ -1,7 +1,7 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NavLoginButton } from "./LoginButton";
-import { BOTTOM_NAV_HEIGHT } from "../lib/layout";
+import { BOTTOM_NAV_HEIGHT, navPillStyle } from "../lib/layout";
 
 const NAV_ITEMS = [
   { path: "/goal", icon: "🎯", label: "目標設定" },
@@ -23,7 +23,7 @@ const baseItemStyle: React.CSSProperties = {
   backgroundColor: "transparent",
   color: "#888",
   fontSize: "11px",
-  fontWeight: "bold",
+  fontWeight: "normal",
   fontFamily: "inherit",
   cursor: "pointer",
   WebkitTapHighlightColor: "transparent", // タップ時に出る灰色の四角を消す
@@ -60,13 +60,24 @@ export const BottomNav: React.FC = () => {
             style={{
               ...baseItemStyle,
               color: isActive ? "var(--accent)" : "#888",
-              backgroundColor: isActive ? "var(--accent-bg)" : "transparent",
             }}
           >
-            <span style={{ fontSize: "20px", lineHeight: "24px" }}>
-              {item.icon}
+            {/* 開いている画面は、アイコンと文字をまとめて
+                角の丸い枠（カプセル型）の薄い紫で光らせる */}
+            <span
+              style={{
+                ...navPillStyle,
+                backgroundColor: isActive ? "var(--accent-bg)" : "transparent",
+                transform: isActive ? "scale(1)" : "scale(0.95)",
+              }}
+            >
+              <span style={{ fontSize: "20px", lineHeight: "24px" }}>
+                {item.icon}
+              </span>
+              <span style={{ fontWeight: isActive ? "bold" : "normal" }}>
+                {item.label}
+              </span>
             </span>
-            <span>{item.label}</span>
           </button>
         );
       })}

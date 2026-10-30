@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { useAuth } from "../hooks/useAuth";
+import { navPillStyle } from "../lib/layout";
 
 // Googleでログインする。成功したらtrueを返す（PC用・スマホ用のボタンで共通）
 const signInWithGoogle = async (): Promise<boolean> => {
@@ -360,19 +361,30 @@ export const NavLoginButton: React.FC<{ itemStyle: React.CSSProperties }> = ({
           color: isMenuOpen ? "var(--accent)" : itemStyle.color,
         }}
       >
-        {user?.photoURL ? (
-          <img
-            src={user.photoURL}
-            alt=""
-            referrerPolicy="no-referrer"
-            style={{ width: "24px", height: "24px", borderRadius: "50%" }}
-          />
-        ) : (
-          <span style={{ fontSize: "20px", lineHeight: "24px" }}>
-            {user ? "👤" : "🔑"}
+        {/* 他のメニューボタンと同じく、アイコンと文字をまとめて角の丸い枠で囲む。
+            ポップアップを開いている間は、薄い紫で光らせる */}
+        <span
+          style={{
+            ...navPillStyle,
+            backgroundColor: isMenuOpen ? "var(--accent-bg)" : "transparent",
+          }}
+        >
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{ width: "24px", height: "24px", borderRadius: "50%" }}
+            />
+          ) : (
+            <span style={{ fontSize: "20px", lineHeight: "24px" }}>
+              {user ? "👤" : "🔑"}
+            </span>
+          )}
+          <span style={{ fontWeight: isMenuOpen ? "bold" : "normal" }}>
+            {user ? "ログイン中" : "ログイン"}
           </span>
-        )}
-        <span>{user ? "ログイン中" : "ログイン"}</span>
+        </span>
       </button>
     </div>
   );
